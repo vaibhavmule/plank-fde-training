@@ -11,7 +11,7 @@ describe("policies API", () => {
     const response = await GET();
     expect(response.status).toBe(200);
     const body = listPoliciesResponseSchema.parse(await response.json());
-    expect(body.policies).toHaveLength(9);
+    expect(body.policies).toHaveLength(10);
     expect(body.policies.map((policy) => policy.slug)).toContain("travel");
     for (const policy of body.policies) {
       expect(policy).not.toHaveProperty("body");

@@ -1,16 +1,21 @@
 import type { MessageStreamEvent } from "@anthropic-ai/sdk/resources/messages/messages";
-import type { ChatCompletionChunk } from "openai/resources/chat/completions/completions";
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, test } from "vitest";
 
-import { anthropic, openai, type ChatMessage } from "./providers";
-
-vi.mock("server-only", () => ({}));
+import {
+  anthropic,
+  openai,
+  openrouter,
+  type ChatMessage,
+  type ToolCall,
+} from "./providers";
+import { calculatorTool } from "./tools";
 
 type Call = { url: string; headers: Headers; body: Record<string, unknown> };
 
-/** A fetch that answers with a canned event stream and records the request. */
-function streamFetch(sse: string) {
+/** A fetch that answers with canned SSE streams, one per request. */
+function fetchQueue(responses: (string | Response)[]) {
   const calls: Call[] = [];
+  let index = 0;
 
   const fetch = (async (input: string | URL | Request, init?: RequestInit) => {
     const headers = new Headers(init?.headers);
@@ -20,10 +25,15 @@ function streamFetch(sse: string) {
       body: JSON.parse(String(init?.body ?? "{}")),
     });
 
-    return new Response(sse, {
-      status: 200,
-      headers: { "content-type": "text/event-stream" },
-    });
+    const response = responses[index++];
+    if (response === undefined) throw new Error("Unexpected request");
+
+    return typeof response === "string"
+      ? new Response(response, {
+          status: 200,
+          headers: { "content-type": "text/event-stream" },
+        })
+      : response;
   }) as typeof globalThis.fetch;
 
   return { fetch, calls };
@@ -35,31 +45,27 @@ function anthropicSse(events: MessageStreamEvent[]) {
     .join("");
 }
 
-function openAiSse(chunks: ChatCompletionChunk[]) {
+function openAiSse(events: unknown[]) {
   return (
-    chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`).join("") +
+    events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join("") +
     "data: [DONE]\n\n"
   );
 }
 
-function delta(chunk: ChatCompletionChunk) {
-  return chunk.choices[0]?.delta?.content;
-}
-
-// The SDK's own shapes, so the fixtures stay honest when it changes.
+// The SDK's own shapes, so the Anthropic fixtures stay honest when it changes.
 type StartUsage = Extract<
   MessageStreamEvent,
   { type: "message_start" }
 >["message"]["usage"];
 type DeltaEvent = Extract<MessageStreamEvent, { type: "message_delta" }>;
 
-const usage = (input: number, output: number): StartUsage => ({
+const usage = (input: number): StartUsage => ({
   cache_creation: null,
   cache_creation_input_tokens: null,
   cache_read_input_tokens: null,
   inference_geo: null,
   input_tokens: input,
-  output_tokens: output,
+  output_tokens: 1,
   output_tokens_details: null,
   server_tool_use: null,
   service_tier: null,
@@ -84,107 +90,199 @@ const stop = (
   stop_sequence: null,
 });
 
-const messageStart: MessageStreamEvent = {
-  type: "message_start",
-  message: {
-    id: "msg_test",
-    type: "message",
-    role: "assistant",
-    model: "claude-sonnet-5-5",
-    content: [],
-    stop_reason: null,
-    stop_sequence: null,
-    container: null,
-    diagnostics: null,
-    stop_details: null,
-    usage: usage(12, 1),
-  },
-};
-
-const anthropicEvents: MessageStreamEvent[] = [
-  messageStart,
-  {
-    type: "content_block_start",
-    index: 0,
-    content_block: { type: "text", text: "", citations: null },
-  },
-  {
-    type: "content_block_delta",
-    index: 0,
-    delta: { type: "text_delta", text: "Hello" },
-  },
-  {
-    type: "content_block_delta",
-    index: 0,
-    delta: { type: "text_delta", text: " there" },
-  },
-  { type: "content_block_stop", index: 0 },
-  // Two usage reports: the last one is the one that counts.
-  {
-    type: "message_delta",
-    delta: stop(null),
-    usage: deltaUsage(3),
-  },
-  {
-    type: "message_delta",
-    delta: stop("end_turn"),
-    usage: deltaUsage(7),
-  },
-  { type: "message_stop" },
-];
-
-function openAiChunk(
-  content: string | null,
-  usage?: ChatCompletionChunk["usage"],
-): ChatCompletionChunk {
+function messageStart(input: number): MessageStreamEvent {
   return {
-    id: "chatcmpl-test",
-    object: "chat.completion.chunk",
-    created: 1_760_000_000,
-    model: "gpt-6.1-sol",
-    choices: content
-      ? [
-          {
-            index: 0,
-            delta: { content },
-            finish_reason: null,
-            logprobs: null,
-          },
-        ]
-      : [],
-    usage,
+    type: "message_start",
+    message: {
+      id: "msg_test",
+      type: "message",
+      role: "assistant",
+      model: "claude-sonnet-5-5",
+      content: [],
+      stop_reason: null,
+      stop_sequence: null,
+      container: null,
+      diagnostics: null,
+      stop_details: null,
+      usage: usage(input),
+    },
   };
 }
 
-const openAiChunks = [
-  openAiChunk("Hello"),
-  openAiChunk(" there"),
-  openAiChunk(null, {
-    prompt_tokens: 9,
-    completion_tokens: 4,
-    total_tokens: 13,
-  } as ChatCompletionChunk["usage"]),
-];
+function anthropicText(
+  input: number,
+  text: string,
+  output: number,
+): MessageStreamEvent[] {
+  return [
+    messageStart(input),
+    {
+      type: "content_block_start",
+      index: 0,
+      content_block: { type: "text", text: "", citations: null },
+    },
+    {
+      type: "content_block_delta",
+      index: 0,
+      delta: { type: "text_delta", text },
+    },
+    { type: "content_block_stop", index: 0 },
+    {
+      type: "message_delta",
+      delta: stop("end_turn"),
+      usage: deltaUsage(output),
+    },
+    { type: "message_stop" },
+  ];
+}
+
+function anthropicCalculator(
+  input: number,
+  expression: string,
+  output: number,
+  stopReason: DeltaEvent["delta"]["stop_reason"] = "tool_use",
+): MessageStreamEvent[] {
+  return [
+    messageStart(input),
+    {
+      type: "content_block_start",
+      index: 0,
+      content_block: { type: "text", text: "", citations: null },
+    },
+    {
+      type: "content_block_delta",
+      index: 0,
+      delta: { type: "text_delta", text: "Let me calculate. " },
+    },
+    { type: "content_block_stop", index: 0 },
+    {
+      type: "content_block_start",
+      index: 1,
+      content_block: {
+        type: "tool_use",
+        id: "toolu_1",
+        name: "calculator",
+        input: {},
+        caller: { type: "direct" },
+      },
+    },
+    {
+      type: "content_block_delta",
+      index: 1,
+      delta: { type: "input_json_delta", partial_json: '{"expression":' },
+    },
+    {
+      type: "content_block_delta",
+      index: 1,
+      delta: {
+        type: "input_json_delta",
+        partial_json: JSON.stringify(expression) + "}",
+      },
+    },
+    { type: "content_block_stop", index: 1 },
+    {
+      type: "message_delta",
+      delta: stop(stopReason),
+      usage: deltaUsage(output),
+    },
+    { type: "message_stop" },
+  ];
+}
+
+function outputText(delta: string) {
+  return {
+    type: "response.output_text.delta",
+    delta,
+    item_id: "msg_1",
+    output_index: 0,
+    content_index: 0,
+    sequence_number: 1,
+  };
+}
+
+function messageItem(text: string) {
+  return {
+    type: "message",
+    id: "msg_1",
+    role: "assistant",
+    status: "completed",
+    content: [{ type: "output_text", text, annotations: [] }],
+  };
+}
+
+function functionCall(
+  name: string,
+  args: string,
+  callId = "call_1",
+): Record<string, unknown> {
+  return {
+    type: "function_call",
+    id: "fc_1",
+    call_id: callId,
+    name,
+    arguments: args,
+    status: "completed",
+  };
+}
+
+function responseCompleted(
+  output: unknown[],
+  {
+    input = 10,
+    outputTokens = 5,
+  }: { input?: number; outputTokens?: number } = {},
+) {
+  return {
+    type: "response.completed",
+    sequence_number: 2,
+    response: {
+      id: "resp_test",
+      status: "completed",
+      error: null,
+      output,
+      usage: {
+        input_tokens: input,
+        output_tokens: outputTokens,
+        total_tokens: input + outputTokens,
+      },
+    },
+  };
+}
+
+function responseIncomplete(output: unknown[]) {
+  return {
+    type: "response.incomplete",
+    sequence_number: 2,
+    response: {
+      id: "resp_test",
+      status: "incomplete",
+      error: null,
+      incomplete_details: { reason: "max_output_tokens" },
+      output,
+      usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15 },
+    },
+  };
+}
 
 const conversation: ChatMessage[] = [{ role: "user", content: "Say hello" }];
 
 describe("anthropic provider", () => {
   test("streams text deltas in order and resolves with the final usage", async () => {
-    const api = streamFetch(anthropicSse(anthropicEvents));
+    const api = fetchQueue([anthropicSse(anthropicText(12, "Hello there", 7))]);
     const provider = anthropic({ apiKey: "test-key", fetch: api.fetch });
 
     const deltas: string[] = [];
     const used = await provider.stream(
       { messages: conversation, system: "Be brief." },
-      (text) => deltas.push(text),
+      { text: (chunk) => deltas.push(chunk), tool: () => {} },
     );
 
-    expect(deltas).toEqual(["Hello", " there"]);
+    expect(deltas).toEqual(["Hello there"]);
     expect(used).toEqual({ input: 12, output: 7 });
   });
 
-  test("sends the model, the conversation, the system prompt and the flags", async () => {
-    const api = streamFetch(anthropicSse(anthropicEvents));
+  test("sends the model, conversation, system prompt and flags", async () => {
+    const api = fetchQueue([anthropicSse(anthropicText(12, "Hello", 3))]);
     const provider = anthropic({ apiKey: "test-key", fetch: api.fetch });
 
     await provider.stream(
@@ -198,7 +296,7 @@ describe("anthropic provider", () => {
         maxTokens: 64,
         effort: "low",
       },
-      () => {},
+      { text: () => {}, tool: () => {} },
     );
 
     const [call] = api.calls;
@@ -222,36 +320,144 @@ describe("anthropic provider", () => {
   });
 
   test("uses the model it is given instead of the default", async () => {
-    const api = streamFetch(anthropicSse(anthropicEvents));
+    const api = fetchQueue([anthropicSse(anthropicText(12, "Hi", 1))]);
     const provider = anthropic({ apiKey: "test-key", fetch: api.fetch });
 
     await provider.stream(
       { messages: conversation, model: "claude-opus-5-5" },
-      () => {},
+      { text: () => {}, tool: () => {} },
     );
 
     expect(api.calls[0].body.model).toBe("claude-opus-5-5");
     expect(provider.models[0].id).toBe("claude-sonnet-5-5");
   });
+
+  test("runs a tool and returns the exact tool_result block", async () => {
+    const api = fetchQueue([
+      anthropicSse(anthropicCalculator(10, "2 + 2", 5)),
+      anthropicSse(anthropicText(20, "4", 2)),
+    ]);
+    const provider = anthropic({ apiKey: "test-key", fetch: api.fetch });
+
+    const deltas: string[] = [];
+    const toolCalls: ToolCall[] = [];
+    const used = await provider.stream(
+      {
+        messages: [{ role: "user", content: "What is 2 + 2?" }],
+        tools: [calculatorTool],
+      },
+      {
+        text: (chunk) => deltas.push(chunk),
+        tool: (call) => toolCalls.push(call),
+      },
+    );
+
+    expect(deltas).toEqual(["Let me calculate. ", "4"]);
+    expect(toolCalls).toEqual([
+      {
+        name: "calculator",
+        input: { expression: "2 + 2" },
+        result: "4",
+        failed: false,
+      },
+    ]);
+    expect(used).toEqual({ input: 30, output: 7 });
+
+    expect(api.calls[0].body).toMatchObject({
+      tools: [
+        {
+          name: "calculator",
+          description: expect.stringContaining("Call this"),
+          input_schema: {
+            type: "object",
+            properties: { expression: { type: "string" } },
+            required: ["expression"],
+          },
+        },
+      ],
+    });
+
+    const messages = api.calls[1].body.messages as unknown[];
+    expect(messages[1]).toEqual({
+      role: "assistant",
+      content: [
+        { type: "text", text: "Let me calculate. " },
+        {
+          type: "tool_use",
+          id: "toolu_1",
+          name: "calculator",
+          input: { expression: "2 + 2" },
+        },
+      ],
+    });
+    expect(messages[2]).toEqual({
+      role: "user",
+      content: [
+        {
+          type: "tool_result",
+          tool_use_id: "toolu_1",
+          content: "4",
+          is_error: false,
+        },
+      ],
+    });
+  });
+
+  test("a reply cut off inside a tool call runs nothing", async () => {
+    const api = fetchQueue([
+      anthropicSse(anthropicCalculator(10, "2 + ", 5, "max_tokens")),
+    ]);
+    const provider = anthropic({ apiKey: "test-key", fetch: api.fetch });
+
+    const toolCalls: ToolCall[] = [];
+    const used = await provider.stream(
+      {
+        messages: [{ role: "user", content: "What is 2 + 2?" }],
+        tools: [calculatorTool],
+      },
+      { text: () => {}, tool: (call) => toolCalls.push(call) },
+    );
+
+    expect(toolCalls).toEqual([]);
+    expect(used).toEqual({ input: 10, output: 5 });
+    expect(api.calls).toHaveLength(1);
+  });
 });
 
 describe("openai provider", () => {
   test("streams text deltas in order and resolves with the final usage", async () => {
-    const api = streamFetch(openAiSse(openAiChunks));
+    const api = fetchQueue([
+      openAiSse([
+        outputText("Hello"),
+        outputText(" there"),
+        responseCompleted([messageItem("Hello there")], {
+          input: 9,
+          outputTokens: 4,
+        }),
+      ]),
+    ]);
     const provider = openai({ apiKey: "test-key", fetch: api.fetch });
 
     const deltas: string[] = [];
     const used = await provider.stream(
       { messages: conversation, system: "Be brief." },
-      (text) => deltas.push(text),
+      { text: (chunk) => deltas.push(chunk), tool: () => {} },
     );
 
-    expect(deltas).toEqual(openAiChunks.map(delta).filter(Boolean));
+    expect(deltas).toEqual(["Hello", " there"]);
     expect(used).toEqual({ input: 9, output: 4 });
   });
 
-  test("sends the conversation, the sampling flags and asks for usage", async () => {
-    const api = streamFetch(openAiSse(openAiChunks));
+  test("sends the conversation, sampling flags and asks for usage", async () => {
+    const api = fetchQueue([
+      openAiSse([
+        outputText("Hello"),
+        responseCompleted([messageItem("Hello")], {
+          input: 9,
+          outputTokens: 4,
+        }),
+      ]),
+    ]);
     const provider = openai({ apiKey: "test-key", fetch: api.fetch });
 
     await provider.stream(
@@ -266,21 +472,20 @@ describe("openai provider", () => {
         temperature: 0.2,
         effort: "high",
       },
-      () => {},
+      { text: () => {}, tool: () => {} },
     );
 
     const [call] = api.calls;
-    expect(call.url).toContain("/chat/completions");
+    expect(call.url).toContain("/v1/responses");
     expect(call.headers.get("authorization")).toBe("Bearer test-key");
     expect(call.body).toMatchObject({
       model: "gpt-6.1-sol",
-      max_completion_tokens: 64,
+      max_output_tokens: 64,
       temperature: 0.2,
-      reasoning_effort: "high",
+      reasoning: { effort: "high" },
       stream: true,
-      stream_options: { include_usage: true },
-      messages: [
-        { role: "system", content: "Be brief." },
+      instructions: "Be brief.",
+      input: [
         { role: "user", content: "Say hello" },
         { role: "assistant", content: "Hello" },
         { role: "user", content: "Again" },
@@ -288,15 +493,149 @@ describe("openai provider", () => {
     });
   });
 
-  test("omits the system message when there is no system prompt", async () => {
-    const api = streamFetch(openAiSse(openAiChunks));
+  test("omits instructions when there is no system prompt", async () => {
+    const api = fetchQueue([
+      openAiSse([
+        outputText("Hi"),
+        responseCompleted([messageItem("Hi")], { input: 4, outputTokens: 1 }),
+      ]),
+    ]);
     const provider = openai({ apiKey: "test-key", fetch: api.fetch });
 
-    await provider.stream({ messages: conversation }, () => {});
+    await provider.stream(
+      { messages: conversation },
+      { text: () => {}, tool: () => {} },
+    );
 
-    expect(api.calls[0].body.messages).toEqual([
+    expect(api.calls[0].body).not.toHaveProperty("instructions");
+    expect(api.calls[0].body.input).toEqual([
       { role: "user", content: "Say hello" },
     ]);
+  });
+
+  test("runs a function call and returns the exact function_call_output item", async () => {
+    const api = fetchQueue([
+      openAiSse([
+        responseCompleted(
+          [functionCall("calculator", '{"expression":"1234 * 5678"}')],
+          { input: 12, outputTokens: 5 },
+        ),
+      ]),
+      openAiSse([
+        outputText("7006652"),
+        responseCompleted([messageItem("7006652")], {
+          input: 30,
+          outputTokens: 4,
+        }),
+      ]),
+    ]);
+    const provider = openai({ apiKey: "test-key", fetch: api.fetch });
+
+    const deltas: string[] = [];
+    const toolCalls: ToolCall[] = [];
+    const used = await provider.stream(
+      {
+        messages: [{ role: "user", content: "What is 1234 * 5678?" }],
+        tools: [calculatorTool],
+      },
+      {
+        text: (chunk) => deltas.push(chunk),
+        tool: (call) => toolCalls.push(call),
+      },
+    );
+
+    expect(deltas).toEqual(["7006652"]);
+    expect(toolCalls).toEqual([
+      {
+        name: "calculator",
+        input: { expression: "1234 * 5678" },
+        result: "7006652",
+        failed: false,
+      },
+    ]);
+    expect(used).toEqual({ input: 42, output: 9 });
+
+    expect(api.calls[0].body.tools).toEqual([
+      {
+        type: "function",
+        name: "calculator",
+        description: expect.stringContaining("Call this"),
+        parameters: {
+          type: "object",
+          properties: {
+            expression: {
+              type: "string",
+              description:
+                "The expression to evaluate, for example (1234 * 5678) / 3",
+            },
+          },
+          required: ["expression"],
+          additionalProperties: false,
+        },
+        strict: true,
+      },
+    ]);
+
+    const input = api.calls[1].body.input as unknown[];
+    expect(input[0]).toEqual({
+      role: "user",
+      content: "What is 1234 * 5678?",
+    });
+    expect(input[1]).toEqual(
+      functionCall("calculator", '{"expression":"1234 * 5678"}'),
+    );
+    expect(input[2]).toEqual({
+      type: "function_call_output",
+      call_id: "call_1",
+      output: "7006652",
+    });
+  });
+
+  test("a reply cut off inside a function call runs nothing", async () => {
+    const api = fetchQueue([
+      openAiSse([
+        responseIncomplete([functionCall("calculator", '{"expression":"2 +')]),
+      ]),
+    ]);
+    const provider = openai({ apiKey: "test-key", fetch: api.fetch });
+
+    const toolCalls: ToolCall[] = [];
+    const used = await provider.stream(
+      {
+        messages: [{ role: "user", content: "What is 2 + 2?" }],
+        tools: [calculatorTool],
+      },
+      { text: () => {}, tool: (call) => toolCalls.push(call) },
+    );
+
+    expect(toolCalls).toEqual([]);
+    expect(used).toEqual({ input: 10, output: 5 });
+    expect(api.calls).toHaveLength(1);
+  });
+});
+
+describe("openrouter provider", () => {
+  test("uses the OpenRouter endpoint and openai-prefixed models", async () => {
+    const api = fetchQueue([
+      openAiSse([
+        outputText("Hi"),
+        responseCompleted([messageItem("Hi")], { input: 4, outputTokens: 1 }),
+      ]),
+    ]);
+    const provider = openrouter({ apiKey: "or-key", fetch: api.fetch });
+
+    await provider.stream(
+      { messages: conversation },
+      { text: () => {}, tool: () => {} },
+    );
+
+    expect(provider.name).toBe("openrouter");
+    expect(provider.models[0].id).toBe("openai/gpt-6.1-sol");
+    expect(api.calls[0].url).toContain(
+      "https://openrouter.ai/api/v1/responses",
+    );
+    expect(api.calls[0].body.model).toBe("openai/gpt-6.1-sol");
+    expect(api.calls[0].headers.get("authorization")).toBe("Bearer or-key");
   });
 });
 
@@ -305,6 +644,7 @@ describe("provider shape", () => {
     for (const provider of [
       anthropic({ apiKey: "k" }),
       openai({ apiKey: "k" }),
+      openrouter({ apiKey: "k" }),
     ]) {
       expect(provider.name).toBeTruthy();
       expect(provider.models.length).toBeGreaterThan(1);

@@ -18,4 +18,11 @@ export const schemaStatements = [
     on requests (created_at desc)`,
   `create index if not exists requests_team_status_idx
     on requests (team, status)`,
+  `create table if not exists notes (
+    id uuid primary key default gen_random_uuid(),
+    seq bigint generated always as identity,
+    title text not null default '',
+    body text not null,
+    created_at timestamptz not null default now()
+  )`,
 ];

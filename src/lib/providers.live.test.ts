@@ -1,28 +1,47 @@
 import { describe, expect, test } from "vitest";
 
-import { anthropic } from "./providers";
+import { anthropic, openrouter, type ToolCall } from "./providers";
+import { createTools } from "./tools";
 
 // Calls the real API. Run with `pnpm test:live`, never as part of `pnpm test`.
-describe("anthropic, live", () => {
-  test("answers a factual question on the small model", async () => {
-    const provider = anthropic({ apiKey: process.env.ANTHROPIC_API_KEY ?? "" });
-
+describe.each([
+  {
+    name: "anthropic",
+    model: "claude-haiku-5-5",
+    provider: anthropic({ apiKey: process.env.ANTHROPIC_API_KEY ?? "" }),
+  },
+  {
+    name: "openrouter",
+    model: "openai/gpt-6-luna",
+    provider: openrouter({ apiKey: process.env.OPENROUTER_API_KEY ?? "" }),
+  },
+])("$name, live", ({ provider, model }) => {
+  test("answers 1234 * 5678 by calling the calculator", async () => {
     let reply = "";
+    const toolCalls: ToolCall[] = [];
+
     const usage = await provider.stream(
       {
-        model: "claude-haiku-5-5",
-        system: "Answer in one word.",
-        messages: [
-          { role: "user", content: "What color is a clear daytime sky?" },
-        ],
-        maxTokens: 20,
+        model,
+        system:
+          "Use the calculator tool for every calculation, then answer with the result.",
+        messages: [{ role: "user", content: "What is 1234 * 5678?" }],
+        tools: createTools(),
+        maxTokens: 512,
       },
-      (chunk) => {
-        reply += chunk;
+      {
+        text: (chunk) => {
+          reply += chunk;
+        },
+        tool: (call) => toolCalls.push(call),
       },
     );
 
-    expect(reply.toLowerCase()).toContain("blue");
+    const calculation = toolCalls.find((call) => call.name === "calculator");
+    expect(calculation).toBeDefined();
+    expect(calculation?.result).toBe("7006652");
+    // The model may format the number with a thousands separator.
+    expect(reply.replace(/[,\s]/g, "")).toContain("7006652");
     expect(usage.input).toBeGreaterThan(0);
     expect(usage.output).toBeGreaterThan(0);
   });

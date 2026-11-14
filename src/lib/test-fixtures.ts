@@ -8,6 +8,11 @@ export async function resetRequests() {
   await query("delete from requests");
 }
 
+/** Empties the notes table between tests. */
+export async function resetNotes() {
+  await query("delete from notes");
+}
+
 /**
  * Inserts rows directly, so a test can set every column, including an id and a
  * `createdAt` the app would otherwise choose.

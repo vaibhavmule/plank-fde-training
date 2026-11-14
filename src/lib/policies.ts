@@ -99,9 +99,29 @@ async function policySlugs(): Promise<string[]> {
     });
 }
 
-async function loadPolicy(slug: string): Promise<Policy> {
+async function readPolicyFile(slug: string): Promise<Policy> {
   const source = await readFile(path.join(POLICIES_DIR, `${slug}.md`), "utf8");
   return parsePolicy(slug, source);
+}
+
+function toMeta(policy: Policy): PolicyMeta {
+  const { title, team, updatedAt, summary, slug } = policy;
+  return { slug, title, team, updatedAt, summary };
+}
+
+/**
+ * Every policy straight from disk, without Next's cache. The terminal and the
+ * research chain are not inside a request, where `cacheLife` is unavailable.
+ */
+export async function loadPolicies(): Promise<Policy[]> {
+  return Promise.all((await policySlugs()).map(readPolicyFile));
+}
+
+/** One policy straight from disk, or null when the slug is unsafe or unknown. */
+export async function loadPolicy(slug: unknown): Promise<Policy | null> {
+  if (!isPolicySlug(slug)) return null;
+  if (!(await policySlugs()).includes(slug)) return null;
+  return readPolicyFile(slug);
 }
 
 /** Metadata for every policy, sorted by title. */
@@ -109,23 +129,17 @@ export async function listPolicies(): Promise<PolicyMeta[]> {
   "use cache";
   cacheLife("max");
 
-  const policies = await Promise.all((await policySlugs()).map(loadPolicy));
-  return policies
-    .map((policy): PolicyMeta => {
-      const { title, team, updatedAt, summary, slug } = policy;
-      return { slug, title, team, updatedAt, summary };
-    })
+  return (await loadPolicies())
+    .map(toMeta)
     .sort((a, b) => a.title.localeCompare(b.title, "en"));
 }
 
 // Files only change with a deploy, so each read is cached for as long as
-// Next.js allows. Only a slug that exactly matches a directory entry is
-// read, which also keeps lookups case-sensitive on macOS.
+// Next.js allows.
 async function readPolicy(slug: string): Promise<Policy | null> {
   "use cache";
   cacheLife("max");
 
-  if (!(await policySlugs()).includes(slug)) return null;
   return loadPolicy(slug);
 }
 
