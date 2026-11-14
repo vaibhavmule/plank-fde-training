@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { buttonVariants } from "@/components/ui/button";
 
-export const metadata = { title: "Page not found · WorkBot" };
+export const metadata = { title: "Page not found" };
 
 export default function NotFound() {
   return (
