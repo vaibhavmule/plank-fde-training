@@ -4,6 +4,8 @@ import {
   getPolicy,
   isPolicySlug,
   listPolicies,
+  loadPolicies,
+  loadPolicy,
   parsePolicy,
   policyMetaSchema,
 } from "@/lib/policies";
@@ -153,7 +155,7 @@ describe("isPolicySlug", () => {
 describe("policy content", () => {
   test("lists every policy with metadata only, sorted by title", async () => {
     const policies = await listPolicies();
-    expect(policies).toHaveLength(9);
+    expect(policies).toHaveLength(10);
     expect(policies.map((policy) => policy.title)).toEqual(
       [...policies.map((policy) => policy.title)].sort((a, b) =>
         a.localeCompare(b, "en"),
@@ -180,6 +182,17 @@ describe("policy content", () => {
       updatedAt: "2026-09-02",
     });
     expect(policy?.body).toContain("## Purpose");
+  });
+
+  test("loads the refunds policy without the Next cache", async () => {
+    const policy = await loadPolicy("refunds");
+    expect(policy).toMatchObject({
+      slug: "refunds",
+      title: "Refund Policy",
+      team: "support",
+    });
+    expect(policy?.body).toContain("$200");
+    expect((await loadPolicies()).map(({ slug }) => slug)).toContain("refunds");
   });
 
   test("returns null for an unknown policy", async () => {

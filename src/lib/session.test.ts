@@ -1,7 +1,8 @@
 import { describe, expect, test } from "vitest";
 
-import type { Completion, Model, Provider } from "./providers";
+import type { Completion, Model, Provider, ToolCall } from "./providers";
 import { Session } from "./session";
+import { calculatorTool } from "./tools";
 
 const MODELS: readonly Model[] = [
   { id: "fast", pricePerMillionTokens: { input: 1, output: 2 } },
@@ -13,22 +14,24 @@ function fakeProvider(options: {
   models?: readonly Model[];
   replies?: string[];
   failAt?: number;
+  toolCalls?: ToolCall[];
 }) {
   const calls: Completion[] = [];
   const provider: Provider = {
     name: options.name,
     models: options.models ?? MODELS,
-    async stream(completion, onText) {
+    async stream(completion, events) {
       const index = calls.length;
       calls.push(completion);
 
       if (options.failAt === index) {
         // Partial output before the failure proves nothing is kept.
-        onText("partial ");
+        events.text("partial ");
         throw new Error("network down");
       }
 
-      onText(options.replies?.[index] ?? `reply ${index}`);
+      events.text(options.replies?.[index] ?? `reply ${index}`);
+      for (const call of options.toolCalls ?? []) events.tool(call);
       return { input: 100, output: 50 };
     },
   };
@@ -125,6 +128,63 @@ describe("session", () => {
     expect(cost.unpriced).toEqual(["unlisted"]);
     // Only the priced turn counts towards the dollars.
     expect(cost.dollars).toBeCloseTo(0.0002, 10);
+  });
+
+  test("records a chain call at its model's price", () => {
+    const { provider } = fakeProvider({ name: "fake" });
+    const session = new Session({ provider });
+
+    const turn = session.record("slow", { input: 100, output: 50 });
+
+    expect(turn).toEqual({
+      model: "slow",
+      usage: { input: 100, output: 50 },
+      dollars: 0.002,
+    });
+    expect(session.cost()).toEqual({
+      turns: 1,
+      input: 100,
+      output: 50,
+      dollars: 0.002,
+      unpriced: [],
+    });
+  });
+
+  test("flags a chain call on an unpriced model", () => {
+    const { provider } = fakeProvider({ name: "fake" });
+    const session = new Session({ provider });
+
+    session.record("unlisted", { input: 100, output: 50 });
+
+    expect(session.cost()).toMatchObject({
+      dollars: 0,
+      unpriced: ["unlisted"],
+    });
+  });
+
+  test("passes the tools and forwards every tool call", async () => {
+    const call: ToolCall = {
+      name: "calculator",
+      input: { expression: "2 + 2" },
+      result: "4",
+      failed: false,
+    };
+    const { provider, calls } = fakeProvider({
+      name: "fake",
+      replies: ["4"],
+      toolCalls: [call],
+    });
+    const session = new Session({ provider, tools: [calculatorTool] });
+    const seen: ToolCall[] = [];
+
+    await session.send(
+      "what is 2 + 2?",
+      () => {},
+      (event) => seen.push(event),
+    );
+
+    expect(calls[0].tools).toEqual([calculatorTool]);
+    expect(seen).toEqual([call]);
   });
 
   test("uses the first model as the default and streams through onText", async () => {

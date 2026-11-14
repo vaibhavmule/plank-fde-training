@@ -5,14 +5,18 @@ import { parseArgs } from "node:util";
 import {
   ANTHROPIC_MODELS,
   OPENAI_MODELS,
+  OPENROUTER_MODELS,
   anthropic,
   openai,
+  openrouter,
   type Effort,
   type Model,
   type Provider,
 } from "@/lib/providers";
+import { research } from "@/lib/research";
 import { Session, type SessionSettings } from "@/lib/session";
 import { SYSTEM_PROMPT } from "@/lib/system-prompt";
+import { createTools } from "@/lib/tools";
 
 // A separate program from the Next app, so it reads its own environment.
 const PROVIDERS: Record<
@@ -32,6 +36,11 @@ const PROVIDERS: Record<
     key: "OPENAI_API_KEY",
     factory: (apiKey) => openai({ apiKey }),
     models: OPENAI_MODELS,
+  },
+  openrouter: {
+    key: "OPENROUTER_API_KEY",
+    factory: (apiKey) => openrouter({ apiKey }),
+    models: OPENROUTER_MODELS,
   },
 };
 
@@ -57,12 +66,17 @@ function message(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
+function dim(text: string) {
+  return stdout.isTTY ? `\x1b[2m${text}\x1b[0m` : text;
+}
+
 function help() {
   console.log(`Commands:
   /model                     list providers and models
   /model <provider> [model]  switch for the rest of the conversation
   /system                    show the system prompt
   /system <text>             replace it
+  /research <question>       research policies and the web, with citations
   /cost                      tokens and dollars for this session
   /help                      this list
   /exit                      quit`);
@@ -140,6 +154,9 @@ async function main() {
     model: values.model,
     system: SYSTEM_PROMPT,
     settings,
+    tools: createTools({
+      braveSearchKey: process.env.BRAVE_SEARCH_KEY ?? "",
+    }),
   });
 
   if (settings.temperature !== undefined && providerName === "anthropic") {
@@ -201,6 +218,31 @@ async function main() {
       continue;
     }
 
+    if (text === "/research" || text.startsWith("/research ")) {
+      const question = text.slice("/research".length).trim();
+      if (!question) {
+        console.log("Usage: /research <question>");
+        continue;
+      }
+
+      try {
+        await research(
+          question,
+          session.provider,
+          {
+            step: (message) => console.log(dim(`· ${message}`)),
+            text: (delta) => stdout.write(delta),
+            spend: (model, usage) => session.record(model, usage),
+          },
+          { braveSearchKey: process.env.BRAVE_SEARCH_KEY ?? "" },
+        );
+        stdout.write("\n");
+      } catch (error) {
+        console.log(`Research failed: ${message(error)}`);
+      }
+      continue;
+    }
+
     if (text.startsWith("/")) {
       console.log(`Unknown command ${text.split(/\s+/)[0]}. /help lists them.`);
       continue;
@@ -208,7 +250,16 @@ async function main() {
 
     stdout.write("WorkBot: ");
     try {
-      await session.send(text, (chunk) => stdout.write(chunk));
+      await session.send(
+        text,
+        (chunk) => stdout.write(chunk),
+        (call) =>
+          stdout.write(
+            dim(
+              `\n  → ${call.name} ${JSON.stringify(call.input)}${call.failed ? " (failed)" : ""}\n`,
+            ),
+          ),
+      );
       stdout.write("\n");
     } catch (error) {
       // Nothing from a failed turn is kept, so the conversation stays usable.

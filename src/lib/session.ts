@@ -3,7 +3,9 @@ import type {
   Effort,
   Provider,
   TokenUsage,
+  ToolCall,
 } from "@/lib/providers";
+import type { Tool } from "@/lib/tools";
 
 export type SessionSettings = {
   temperature?: number;
@@ -32,6 +34,7 @@ export type SessionOptions = {
   model?: string;
   system?: string;
   settings?: SessionSettings;
+  tools?: readonly Tool[];
 };
 
 function pricedAt(provider: Provider, model: string) {
@@ -48,14 +51,16 @@ export class Session {
   #model: string;
   #system: string;
   #settings: SessionSettings;
+  #tools: readonly Tool[];
   #messages: ChatMessage[] = [];
   #turns: Turn[] = [];
 
-  constructor({ provider, model, system, settings }: SessionOptions) {
+  constructor({ provider, model, system, settings, tools }: SessionOptions) {
     this.#provider = provider;
     this.#model = model ?? provider.models[0].id;
     this.#system = system ?? "";
     this.#settings = settings ?? {};
+    this.#tools = tools ?? [];
   }
 
   get provider() {
@@ -78,6 +83,10 @@ export class Session {
     return [...this.#turns];
   }
 
+  get tools(): readonly Tool[] {
+    return [...this.#tools];
+  }
+
   setSystem(text: string) {
     this.#system = text;
   }
@@ -92,7 +101,11 @@ export class Session {
    * Streams one reply. Both messages reach the history only after the reply
    * completes, so a failed turn leaves nothing behind.
    */
-  async send(text: string, onText: (chunk: string) => void): Promise<Turn> {
+  async send(
+    text: string,
+    onText: (chunk: string) => void,
+    onTool: (call: ToolCall) => void = () => {},
+  ): Promise<Turn> {
     const provider = this.#provider;
     const model = this.#model;
     const messages = [
@@ -102,15 +115,33 @@ export class Session {
 
     let reply = "";
     const usage = await provider.stream(
-      { ...this.#settings, messages, system: this.#system, model },
-      (chunk) => {
-        reply += chunk;
-        onText(chunk);
+      {
+        ...this.#settings,
+        messages,
+        system: this.#system,
+        model,
+        tools: this.#tools,
+      },
+      {
+        text: (chunk) => {
+          reply += chunk;
+          onText(chunk);
+        },
+        tool: onTool,
       },
     );
 
     this.#messages = [...messages, { role: "assistant", content: reply }];
 
+    return this.#record(provider, model, usage);
+  }
+
+  /** Adds a model call made outside a chat turn, such as a research step. */
+  record(model: string, usage: TokenUsage): Turn {
+    return this.#record(this.#provider, model, usage);
+  }
+
+  #record(provider: Provider, model: string, usage: TokenUsage): Turn {
     const prices = pricedAt(provider, model);
     const turn: Turn = {
       model,
