@@ -19,6 +19,12 @@ export function SiteHeader() {
           >
             Requests
           </Link>
+          <Link
+            href="/dashboards"
+            className={buttonVariants({ variant: "ghost" })}
+          >
+            Dashboards
+          </Link>
           <Link href="/admin" className={buttonVariants({ variant: "ghost" })}>
             Admin
           </Link>

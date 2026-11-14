@@ -22,6 +22,8 @@
     "@anthropic-ai/sdk": "^1.8.0",
     "@base-ui/react": "^1.9.0",
     "@electric-sql/pglite": "^0.5.16",
+    "@json-render/core": "^0.22.0",
+    "@json-render/react": "^0.22.0",
     "@modelcontextprotocol/sdk": "^1.32.2",
     "ai": "^7.0.172",
     "class-variance-authority": "^0.7.1",

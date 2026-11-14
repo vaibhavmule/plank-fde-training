@@ -80,11 +80,76 @@ export async function updateRequestStatus(
   return rows[0] && parseRow(rows[0]);
 }
 
+export type RequestSummary = {
+  total: number;
+  byStatus: Record<WorkRequest["status"], number>;
+  byTeam: Record<WorkRequest["team"], number>;
+  byPriority: Record<WorkRequest["priority"], number>;
+  latest: WorkRequest[];
+};
+
+/**
+ * One grouped query for the numbers a generated page may use, plus the ten
+ * latest requests. The JSON aggregate keeps the latest rows in the same
+ * statement as the counts.
+ */
+export async function requestSummary(): Promise<RequestSummary> {
+  await io();
+
+  const rows = await query(
+    `with latest as (
+       select ${COLUMNS} from requests
+       order by created_at desc, seq desc
+       limit 10
+     )
+     select
+       count(*)::int as total,
+       count(*) filter (where status = 'open')::int as open,
+       count(*) filter (where status = 'in_progress')::int as in_progress,
+       count(*) filter (where status = 'closed')::int as closed,
+       count(*) filter (where team = 'operations')::int as operations,
+       count(*) filter (where team = 'finance')::int as finance,
+       count(*) filter (where team = 'support')::int as support,
+       count(*) filter (where priority = 'low')::int as low,
+       count(*) filter (where priority = 'medium')::int as medium,
+       count(*) filter (where priority = 'high')::int as high,
+       (select coalesce(json_agg(row_to_json(latest)), '[]'::json) from latest) as latest
+     from requests`,
+  );
+
+  const row = rows[0] ?? {};
+  const count = (value: unknown) => Number(value ?? 0);
+  const latest = Array.isArray(row.latest) ? row.latest : [];
+
+  return {
+    total: count(row.total),
+    byStatus: {
+      open: count(row.open),
+      in_progress: count(row.in_progress),
+      closed: count(row.closed),
+    },
+    byTeam: {
+      operations: count(row.operations),
+      finance: count(row.finance),
+      support: count(row.support),
+    },
+    byPriority: {
+      low: count(row.low),
+      medium: count(row.medium),
+      high: count(row.high),
+    },
+    latest: latest.map((item) => parseRow(item as Row)),
+  };
+}
+
 // Postgres returns timestamptz as a Date, and the schema wants an ISO string.
 function parseRow(row: Row): WorkRequest {
   const createdAt = row.createdAt;
   return workRequestSchema.parse({
     ...row,
-    createdAt: createdAt instanceof Date ? createdAt.toISOString() : createdAt,
+    createdAt:
+      createdAt instanceof Date
+        ? createdAt.toISOString()
+        : new Date(String(createdAt)).toISOString(),
   });
 }

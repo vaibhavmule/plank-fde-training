@@ -8,6 +8,7 @@ import { buttonVariants } from "@/components/ui/button";
 const links = [
   { href: "/admin", label: "Overview" },
   { href: "/requests", label: "Requests" },
+  { href: "/dashboards", label: "Dashboards" },
   { href: "/admin/assistant", label: "Assistant" },
   { href: "/admin/settings", label: "Settings" },
 ];
