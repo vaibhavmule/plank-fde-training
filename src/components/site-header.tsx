@@ -16,6 +16,9 @@ export function SiteHeader() {
           >
             Requests
           </Link>
+          <Link href="/admin" className={buttonVariants({ variant: "ghost" })}>
+            Admin
+          </Link>
           <Link
             href="/settings"
             className={buttonVariants({ variant: "ghost" })}
