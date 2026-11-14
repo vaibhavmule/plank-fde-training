@@ -3,7 +3,12 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { io } from "next/cache";
 
-import { requestInputSchema, type WorkRequest } from "@/lib/request-model";
+import {
+  requestIdSchema,
+  requestInputSchema,
+  statusSchema,
+  type WorkRequest,
+} from "@/lib/request-model";
 
 const requestGlobal = globalThis as typeof globalThis & {
   workbotRequests?: WorkRequest[];
@@ -39,4 +44,22 @@ export async function getRequest(id: string): Promise<WorkRequest | undefined> {
   const request = store().find((candidate) => candidate.id === id);
   // A copy, for the same reason as listRequests.
   return request && { ...request };
+}
+
+// Returns undefined, without writing, for an invalid id, an unknown id, or a
+// status outside the enum, so a tampered action cannot change anything.
+export async function updateRequestStatus(
+  id: unknown,
+  status: unknown,
+): Promise<WorkRequest | undefined> {
+  const parsedId = requestIdSchema.safeParse(id);
+  const parsedStatus = statusSchema.safeParse(status);
+  if (!parsedId.success || !parsedStatus.success) return undefined;
+
+  await io();
+  const request = store().find((candidate) => candidate.id === parsedId.data);
+  if (!request) return undefined;
+
+  request.status = parsedStatus.data;
+  return { ...request };
 }

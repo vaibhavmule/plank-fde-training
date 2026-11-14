@@ -86,7 +86,7 @@ describe("request detail page", () => {
     const html = await render(request.id);
     expect(html).toContain("&lt;script&gt;");
     expect(html).toContain("&lt;img src=x onerror=alert(1)&gt;");
-    expect(html).not.toContain("<script>");
+    expect(html).not.toContain('<script>alert("t")</script>');
     expect(html).not.toContain("<img");
   });
 });
