@@ -162,7 +162,10 @@ export function posthogServer(api: PostHogApi) {
             const record = row as Record<string, unknown>;
             return {
               event: String(record.name ?? ""),
-              lastSeen: record.last_seen ? String(record.last_seen) : null,
+              // PostHog names this field last_seen_at on event definitions.
+              lastSeen: record.last_seen_at
+                ? String(record.last_seen_at)
+                : null,
             };
           }),
         });

@@ -52,7 +52,7 @@ function fakePostHog() {
       return Response.json({
         results: [...seen].map(([name, lastSeen]) => ({
           name,
-          last_seen: lastSeen,
+          last_seen_at: lastSeen,
         })),
       });
     }
