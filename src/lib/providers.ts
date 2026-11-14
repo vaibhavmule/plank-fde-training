@@ -1,8 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 
-import { config } from "@/lib/config";
-
 export type Model = {
   id: string;
   /** Published list price in USD per million tokens, standard tier. */
@@ -11,12 +9,24 @@ export type Model = {
 
 export type TokenUsage = { input: number; output: number };
 
+export type ChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+/** How much thinking a reasoning model should do. */
+export type Effort = "low" | "medium" | "high";
+
 export type Completion = {
-  prompt: string;
+  /** The conversation so far, oldest first. */
+  messages: readonly ChatMessage[];
   system?: string;
   /** Defaults to the first model in the provider's list. */
   model?: string;
   maxTokens?: number;
+  /** OpenAI only: the current Claude models reject temperature. */
+  temperature?: number;
+  effort?: Effort;
 };
 
 export type Provider = {
@@ -31,7 +41,9 @@ export type Provider = {
 };
 
 export type ProviderOptions = {
-  apiKey?: string;
+  // Passed in explicitly: this module also runs outside Next, where
+  // src/lib/config.ts (server-only) cannot load.
+  apiKey: string;
   // Injected by tests so no request leaves the process.
   fetch?: typeof globalThis.fetch;
 };
@@ -61,9 +73,9 @@ export const OPENAI_MODELS: readonly Model[] = [
 ];
 
 /** Anthropic, streamed through the Messages API. */
-export function anthropic(options: ProviderOptions = {}): Provider {
+export function anthropic(options: ProviderOptions): Provider {
   const client = new Anthropic({
-    apiKey: options.apiKey ?? config.anthropicApiKey,
+    apiKey: options.apiKey,
     // Rate limits and server errors are retried for us, with backoff.
     maxRetries: 3,
     fetch: options.fetch,
@@ -77,7 +89,15 @@ export function anthropic(options: ProviderOptions = {}): Provider {
         model: completion.model ?? ANTHROPIC_MODELS[0].id,
         max_tokens: completion.maxTokens ?? DEFAULT_MAX_TOKENS,
         system: completion.system,
-        messages: [{ role: "user", content: completion.prompt }],
+        messages: completion.messages.map(({ role, content }) => ({
+          role,
+          content,
+        })),
+        // Temperature is never sent: Claude models reject it. The knob that
+        // shapes a reply here is output_config.effort.
+        output_config: completion.effort
+          ? { effort: completion.effort }
+          : undefined,
         stream: true,
       });
 
@@ -104,9 +124,9 @@ export function anthropic(options: ProviderOptions = {}): Provider {
 }
 
 /** OpenAI, streamed through Chat Completions. */
-export function openai(options: ProviderOptions = {}): Provider {
+export function openai(options: ProviderOptions): Provider {
   const client = new OpenAI({
-    apiKey: options.apiKey ?? config.openaiApiKey,
+    apiKey: options.apiKey,
     maxRetries: 3,
     fetch: options.fetch,
   });
@@ -122,8 +142,13 @@ export function openai(options: ProviderOptions = {}): Provider {
           ...(completion.system
             ? [{ role: "system" as const, content: completion.system }]
             : []),
-          { role: "user" as const, content: completion.prompt },
+          ...completion.messages.map(({ role, content }) => ({
+            role,
+            content,
+          })),
         ],
+        temperature: completion.temperature,
+        reasoning_effort: completion.effort,
         stream: true,
         // Without this the final chunk carries no usage at all.
         stream_options: { include_usage: true },

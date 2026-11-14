@@ -2,7 +2,7 @@ import type { MessageStreamEvent } from "@anthropic-ai/sdk/resources/messages/me
 import type { ChatCompletionChunk } from "openai/resources/chat/completions/completions";
 import { describe, expect, test, vi } from "vitest";
 
-import { anthropic, openai } from "./providers";
+import { anthropic, openai, type ChatMessage } from "./providers";
 
 vi.mock("server-only", () => ({}));
 
@@ -166,31 +166,42 @@ const openAiChunks = [
   } as ChatCompletionChunk["usage"]),
 ];
 
+const conversation: ChatMessage[] = [{ role: "user", content: "Say hello" }];
+
 describe("anthropic provider", () => {
   test("streams text deltas in order and resolves with the final usage", async () => {
-    const posthog = streamFetch(anthropicSse(anthropicEvents));
-    const provider = anthropic({ apiKey: "test-key", fetch: posthog.fetch });
+    const api = streamFetch(anthropicSse(anthropicEvents));
+    const provider = anthropic({ apiKey: "test-key", fetch: api.fetch });
 
     const deltas: string[] = [];
-    const usage = await provider.stream(
-      { prompt: "Say hello", system: "Be brief." },
+    const used = await provider.stream(
+      { messages: conversation, system: "Be brief." },
       (text) => deltas.push(text),
     );
 
     expect(deltas).toEqual(["Hello", " there"]);
-    expect(usage).toEqual({ input: 12, output: 7 });
+    expect(used).toEqual({ input: 12, output: 7 });
   });
 
-  test("sends the model, messages, system prompt and streaming flag", async () => {
-    const posthog = streamFetch(anthropicSse(anthropicEvents));
-    const provider = anthropic({ apiKey: "test-key", fetch: posthog.fetch });
+  test("sends the model, the conversation, the system prompt and the flags", async () => {
+    const api = streamFetch(anthropicSse(anthropicEvents));
+    const provider = anthropic({ apiKey: "test-key", fetch: api.fetch });
 
     await provider.stream(
-      { prompt: "Say hello", system: "Be brief.", maxTokens: 64 },
+      {
+        messages: [
+          { role: "user", content: "Say hello" },
+          { role: "assistant", content: "Hello" },
+          { role: "user", content: "Again" },
+        ],
+        system: "Be brief.",
+        maxTokens: 64,
+        effort: "low",
+      },
       () => {},
     );
 
-    const [call] = posthog.calls;
+    const [call] = api.calls;
     expect(call.url).toContain("/v1/messages");
     // v1 of the SDK sends the key as a bearer token, not x-api-key.
     expect(call.headers.get("authorization")).toBe("Bearer test-key");
@@ -199,17 +210,27 @@ describe("anthropic provider", () => {
       max_tokens: 64,
       system: "Be brief.",
       stream: true,
-      messages: [{ role: "user", content: "Say hello" }],
+      output_config: { effort: "low" },
+      messages: [
+        { role: "user", content: "Say hello" },
+        { role: "assistant", content: "Hello" },
+        { role: "user", content: "Again" },
+      ],
     });
+    // Claude models reject temperature, so it is never sent.
+    expect(call.body).not.toHaveProperty("temperature");
   });
 
   test("uses the model it is given instead of the default", async () => {
-    const posthog = streamFetch(anthropicSse(anthropicEvents));
-    const provider = anthropic({ apiKey: "test-key", fetch: posthog.fetch });
+    const api = streamFetch(anthropicSse(anthropicEvents));
+    const provider = anthropic({ apiKey: "test-key", fetch: api.fetch });
 
-    await provider.stream({ prompt: "hi", model: "claude-opus-5-5" }, () => {});
+    await provider.stream(
+      { messages: conversation, model: "claude-opus-5-5" },
+      () => {},
+    );
 
-    expect(posthog.calls[0].body.model).toBe("claude-opus-5-5");
+    expect(api.calls[0].body.model).toBe("claude-opus-5-5");
     expect(provider.models[0].id).toBe("claude-sonnet-5-5");
   });
 });
@@ -220,21 +241,31 @@ describe("openai provider", () => {
     const provider = openai({ apiKey: "test-key", fetch: api.fetch });
 
     const deltas: string[] = [];
-    const usage = await provider.stream(
-      { prompt: "Say hello", system: "Be brief." },
+    const used = await provider.stream(
+      { messages: conversation, system: "Be brief." },
       (text) => deltas.push(text),
     );
 
     expect(deltas).toEqual(openAiChunks.map(delta).filter(Boolean));
-    expect(usage).toEqual({ input: 9, output: 4 });
+    expect(used).toEqual({ input: 9, output: 4 });
   });
 
-  test("sends the model, messages, system prompt and asks for usage", async () => {
+  test("sends the conversation, the sampling flags and asks for usage", async () => {
     const api = streamFetch(openAiSse(openAiChunks));
     const provider = openai({ apiKey: "test-key", fetch: api.fetch });
 
     await provider.stream(
-      { prompt: "Say hello", system: "Be brief.", maxTokens: 64 },
+      {
+        messages: [
+          { role: "user", content: "Say hello" },
+          { role: "assistant", content: "Hello" },
+          { role: "user", content: "Again" },
+        ],
+        system: "Be brief.",
+        maxTokens: 64,
+        temperature: 0.2,
+        effort: "high",
+      },
       () => {},
     );
 
@@ -244,11 +275,15 @@ describe("openai provider", () => {
     expect(call.body).toMatchObject({
       model: "gpt-6.1-sol",
       max_completion_tokens: 64,
+      temperature: 0.2,
+      reasoning_effort: "high",
       stream: true,
       stream_options: { include_usage: true },
       messages: [
         { role: "system", content: "Be brief." },
         { role: "user", content: "Say hello" },
+        { role: "assistant", content: "Hello" },
+        { role: "user", content: "Again" },
       ],
     });
   });
@@ -257,10 +292,10 @@ describe("openai provider", () => {
     const api = streamFetch(openAiSse(openAiChunks));
     const provider = openai({ apiKey: "test-key", fetch: api.fetch });
 
-    await provider.stream({ prompt: "hi" }, () => {});
+    await provider.stream({ messages: conversation }, () => {});
 
     expect(api.calls[0].body.messages).toEqual([
-      { role: "user", content: "hi" },
+      { role: "user", content: "Say hello" },
     ]);
   });
 });
