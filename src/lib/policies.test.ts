@@ -153,7 +153,7 @@ describe("isPolicySlug", () => {
 describe("policy content", () => {
   test("lists every policy with metadata only, sorted by title", async () => {
     const policies = await listPolicies();
-    expect(policies).toHaveLength(8);
+    expect(policies).toHaveLength(9);
     expect(policies.map((policy) => policy.title)).toEqual(
       [...policies.map((policy) => policy.title)].sort((a, b) =>
         a.localeCompare(b, "en"),

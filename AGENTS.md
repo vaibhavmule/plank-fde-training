@@ -23,7 +23,9 @@ Tailwind and shadcn/ui, deployed on Vercel.
   `config` from it. It is server-only; never expose secrets to client code.
 - Keep commits small, conventional (`feat:`, `fix:`, `chore:`) and imperative.
 - **Claude tooling in `.claude/`:** skills `/component`, `/api-route`, `/pre-deploy` and `/pr-review`; reviewer subagents `bug-hunter`, `performance-reviewer` and `security-reviewer` (run together by `/pr-review`); and a `PostToolUse` hook in `.claude/settings.json` that runs Prettier on every file edited with Edit or Write.
-- **Folder instructions:** `content/policies/CLAUDE.md` defines the policy file format, required front matter and how to write a policy.
+- **Folder instructions:** `src/app/api/CLAUDE.md` defines route contracts and
+  tests. `content/policies/CLAUDE.md` defines the policy file format, required
+  front matter and how to write a policy.
 
 <!-- BEGIN:nextjs-agent-rules -->
 
