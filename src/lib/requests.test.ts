@@ -1,24 +1,40 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
-import { requestInputSchema, workRequestSchema } from "@/lib/request-model";
+import {
+  requestInputSchema,
+  workRequestSchema,
+  type WorkRequest,
+} from "@/lib/request-model";
 import {
   createRequest,
   getRequest,
   listRequests,
   updateRequestStatus,
 } from "@/lib/requests";
+import { resetRequests, seedRequests } from "@/lib/test-fixtures";
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ io: vi.fn(async () => {}) }));
 
 const input = { title: "Replace laptop", team: "operations" };
 
-beforeEach(() => {
-  vi.stubGlobal("workbotRequests", []);
+function stored(title: string, createdAt: string): WorkRequest {
+  return {
+    id: crypto.randomUUID(),
+    title,
+    details: "",
+    team: "operations",
+    priority: "medium",
+    status: "open",
+    createdAt,
+  };
+}
+
+beforeEach(async () => {
+  await resetRequests();
 });
 
 afterEach(() => {
-  vi.unstubAllGlobals();
   vi.useRealTimers();
 });
 
@@ -96,12 +112,24 @@ describe("request storage", () => {
     expect(second.id).not.toBe(first.id);
   });
 
-  test("lists newest first, including creations with the same timestamp", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-11-14T10:00:00Z"));
-    const first = await createRequest(input);
-    const second = await createRequest({ ...input, title: "Second" });
-    expect(await listRequests()).toEqual([second, first]);
+  test("lists newest first", async () => {
+    await seedRequests([
+      stored("Older", "2026-11-14T09:00:00.000Z"),
+      stored("Newer", "2026-11-14T10:00:00.000Z"),
+    ]);
+    expect((await listRequests()).map(({ title }) => title)).toEqual([
+      "Newer",
+      "Older",
+    ]);
+  });
+
+  test("returns both records when their timestamps tie, newest insertion first", async () => {
+    const at = "2026-11-14T10:00:00.000Z";
+    await seedRequests([stored("Tie A", at), stored("Tie B", at)]);
+    expect((await listRequests()).map(({ title }) => title)).toEqual([
+      "Tie B",
+      "Tie A",
+    ]);
   });
 
   test("retains records across module reloads through globalThis", async () => {
@@ -129,11 +157,18 @@ describe("request storage", () => {
     expect(await getRequest(second.id)).toEqual(second);
   });
 
-  test("returns undefined for a missing ID, including on an empty store", async () => {
+  test("returns undefined for a missing or malformed ID", async () => {
     expect(await getRequest("missing")).toBeUndefined();
-    const created = await createRequest(input);
-    expect(await getRequest(created.id.toUpperCase())).toBeUndefined();
     expect(await getRequest("")).toBeUndefined();
+    await seedRequests([stored("Stored", "2026-11-14T10:00:00.000Z")]);
+    expect(
+      await getRequest("00000000-0000-0000-0000-000000000000"),
+    ).toBeUndefined();
+  });
+
+  test("matches a UUID whatever its case, as Postgres does", async () => {
+    const created = await createRequest(input);
+    expect(await getRequest(created.id.toUpperCase())).toEqual(created);
   });
 
   test("does not expose a fetched record to caller mutation", async () => {

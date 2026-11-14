@@ -27,7 +27,23 @@ a second Next.js app in the same pnpm workspace.
   sends no JavaScript to the browser. Add `"use client"` only to the smallest
   leaf that needs state, effects or browser APIs.
 - **One module reads `process.env`:** `src/lib/config.ts`. Everywhere else imports
-  `config` from it. It is server-only; never expose secrets to client code.
+  `config` from it. It is server-only; never expose secrets to client code. The
+  stdio MCP entry points in `mcp/` are separate programs and read `.env.local`
+  themselves, because `config` refuses to load outside a Server Component.
+- **The database:** requests live in Postgres. `src/lib/db.ts` owns the
+  connection (`postgres://` uses postgres.js, anything else an embedded PGlite)
+  and is the only module that runs SQL for the app. Tables come from
+  `src/lib/schema.ts`, which is append-only: statements are idempotent and run on
+  every start, so never edit an old one — add a new statement at the end.
+  `src/lib/request-model.ts` stays free of database code so Client Components can
+  import it.
+- **Analytics:** `src/lib/analytics.tsx` is the only thing that sends events.
+  Call `track()` from actions and render `Track` inside a `<Suspense>` boundary,
+  because reading the visitor cookie is request-time work. Names are
+  `snake_case`; properties name records (`requestId`, `team`), never people.
+- **MCP servers:** `src/mcp/*` exports a factory that takes its client as an
+  argument (`query`, `fetch`), so tests can run in process. The `mcp/*.ts` entry
+  points at the repository root serve over stdio, and `.mcp.json` starts them.
 - Keep commits small, conventional (`feat:`, `fix:`, `chore:`) and imperative.
 - **Claude tooling in `.claude/`:** skills `/component`, `/api-route`, `/pre-deploy` and `/pr-review`; reviewer subagents `bug-hunter`, `performance-reviewer` and `security-reviewer` (run together by `/pr-review`); and a `PostToolUse` hook in `.claude/settings.json` that runs Prettier on every file edited with Edit or Write.
 - **Folder instructions:** `src/app/api/CLAUDE.md` defines route contracts and

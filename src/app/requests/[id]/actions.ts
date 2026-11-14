@@ -2,6 +2,7 @@
 
 import { refresh } from "next/cache";
 
+import { track } from "@/lib/analytics";
 import { updateRequestStatus } from "@/lib/requests";
 
 // The id and status arrive bound from the detail page, but both are re-checked
@@ -10,5 +11,10 @@ export async function setStatus(id: string, status: string) {
   const updated = await updateRequestStatus(id, status);
   if (!updated) return;
 
+  await track("request_status_changed", {
+    requestId: updated.id,
+    team: updated.team,
+    status: updated.status,
+  });
   refresh();
 }

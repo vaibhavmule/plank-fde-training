@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+
 import { RequestForm } from "./request-form";
 import { SiteHeader } from "@/components/site-header";
 import {
@@ -7,6 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Track } from "@/lib/analytics";
 
 export const metadata = { title: "New request" };
 
@@ -28,6 +31,9 @@ export default function NewRequestPage() {
             <RequestForm />
           </CardContent>
         </Card>
+        <Suspense fallback={null}>
+          <Track event="request_form_viewed" />
+        </Suspense>
       </main>
     </>
   );

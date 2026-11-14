@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import { setStatus } from "./actions";
 import { createRequest, getRequest, listRequests } from "@/lib/requests";
+import { resetRequests } from "@/lib/test-fixtures";
 
 const refresh = vi.fn();
 
@@ -11,12 +12,12 @@ vi.mock("next/cache", () => ({
   refresh: () => refresh(),
 }));
 
-beforeEach(() => {
-  vi.stubGlobal("workbotRequests", []);
+beforeEach(async () => {
+  await resetRequests();
   refresh.mockClear();
 });
 afterEach(() => {
-  vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 const input = {

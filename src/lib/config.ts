@@ -4,4 +4,8 @@ import "server-only";
 export const config = {
   environment: process.env.VERCEL_ENV || "development",
   commit: (process.env.VERCEL_GIT_COMMIT_SHA || "local").slice(0, 7),
+  // A postgres:// URL uses a server; anything else is an embedded PGlite path.
+  databaseUrl: process.env.DATABASE_URL ?? "",
+  posthogKey: process.env.POSTHOG_KEY ?? "",
+  posthogHost: process.env.POSTHOG_HOST || "https://us.i.posthog.com",
 } as const;

@@ -6,4 +6,8 @@ export default defineConfig({
   resolve: {
     alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
   },
+  test: {
+    // Tests run on an embedded, in-memory database.
+    env: { DATABASE_URL: "memory://" },
+  },
 });
