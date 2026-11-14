@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import RequestPage from "./page";
 import type { WorkRequest } from "@/lib/request-model";
+import { resetRequests, seedRequests } from "@/lib/test-fixtures";
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ io: vi.fn(async () => {}) }));
@@ -36,11 +37,11 @@ async function render(id: string) {
   return await new Response(stream).text();
 }
 
-beforeEach(() => {
-  vi.stubGlobal("workbotRequests", [request]);
+beforeEach(async () => {
+  await resetRequests();
+  await seedRequests([request]);
 });
 afterEach(() => {
-  vi.unstubAllGlobals();
   vi.mocked(notFound).mockClear();
 });
 
@@ -76,7 +77,8 @@ describe("request detail page", () => {
   });
 
   test("escapes submitted markup when the page renders it", async () => {
-    vi.stubGlobal("workbotRequests", [
+    await resetRequests();
+    await seedRequests([
       {
         ...request,
         title: '<script>alert("t")</script>',

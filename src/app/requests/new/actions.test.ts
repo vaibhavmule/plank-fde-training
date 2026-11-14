@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { submitRequest } from "./actions";
 import { initialRequestFormState } from "./form-state";
 import { listRequests } from "@/lib/requests";
+import { resetRequests } from "@/lib/test-fixtures";
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ io: vi.fn(async () => {}) }));
@@ -18,11 +19,11 @@ function form(values: Record<string, string>) {
   return data;
 }
 
-beforeEach(() => {
-  vi.stubGlobal("workbotRequests", []);
+beforeEach(async () => {
+  await resetRequests();
 });
 afterEach(() => {
-  vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 describe("submitRequest", () => {

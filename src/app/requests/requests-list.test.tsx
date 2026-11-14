@@ -1,8 +1,9 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { RequestsList } from "./requests-list";
 import type { WorkRequest } from "@/lib/request-model";
+import { resetRequests, seedRequests } from "@/lib/test-fixtures";
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ io: vi.fn(async () => {}) }));
@@ -55,15 +56,9 @@ function currentLinks(html: string) {
     .sort();
 }
 
-beforeEach(() => {
-  vi.stubGlobal(
-    "workbotRequests",
-    seed.map((request) => ({ ...request })),
-  );
-});
-
-afterEach(() => {
-  vi.unstubAllGlobals();
+beforeEach(async () => {
+  await resetRequests();
+  await seedRequests(seed);
 });
 
 describe("RequestsList", () => {
@@ -139,7 +134,7 @@ describe("RequestsList", () => {
   });
 
   test("keeps the first-request empty state when nothing is stored", async () => {
-    vi.stubGlobal("workbotRequests", []);
+    await resetRequests();
     for (const query of [{}, { team: "finance", status: "open" }]) {
       const html = await render(query);
       expect(html).toContain("No requests yet");

@@ -6,8 +6,8 @@ import {
   teamSchema,
   type WorkRequest,
 } from "@/lib/request-model";
-import { createRequest, listRequests } from "@/lib/requests";
-
+import { listRequests } from "@/lib/requests";
+import { resetRequests, seedRequests } from "@/lib/test-fixtures";
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ io: vi.fn(async () => {}) }));
 
@@ -39,15 +39,12 @@ const seed = [
 
 const titles = (requests: WorkRequest[]) => requests.map(({ title }) => title);
 
-beforeEach(() => {
-  vi.stubGlobal(
-    "workbotRequests",
-    seed.map((request) => ({ ...request })),
-  );
+beforeEach(async () => {
+  await resetRequests();
+  await seedRequests(seed);
 });
 
 afterEach(() => {
-  vi.unstubAllGlobals();
   vi.useRealTimers();
 });
 
@@ -147,18 +144,13 @@ describe("filtered request list", () => {
   });
 
   test("keeps filtered results newest first, including new submissions", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-11-14T13:00:00Z"));
-    await createRequest({ title: "Support, same instant A", team: "support" });
-    await createRequest({ title: "Finance, same instant", team: "finance" });
-    await createRequest({ title: "Support, same instant B", team: "support" });
+    await seedRequests([
+      stored("Support, newest", "support", "open", "13"),
+      stored("Finance, newest", "finance", "open", "14"),
+    ]);
 
     const support = await listRequests({ team: "support" });
-    expect(titles(support)).toEqual([
-      "Support, same instant B",
-      "Support, same instant A",
-      "Support in progress",
-    ]);
+    expect(titles(support)).toEqual(["Support, newest", "Support in progress"]);
     const open = await listRequests({ status: "open" });
     expect(open.map(({ createdAt }) => createdAt)).toEqual(
       open

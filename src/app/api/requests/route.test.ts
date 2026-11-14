@@ -7,15 +7,15 @@ import {
   listRequestsResponseSchema,
 } from "./types";
 import { createRequest } from "@/lib/requests";
+import { resetRequests } from "@/lib/test-fixtures";
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ io: vi.fn(async () => {}) }));
 
-beforeEach(() => {
-  vi.stubGlobal("workbotRequests", []);
+beforeEach(async () => {
+  await resetRequests();
 });
 afterEach(() => {
-  vi.unstubAllGlobals();
   vi.useRealTimers();
 });
 
