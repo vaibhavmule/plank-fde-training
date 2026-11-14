@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/card";
 import { config } from "@/lib/config";
 
-export const metadata = { title: "Settings · WorkBot" };
+export const metadata = { title: "Settings" };
 
 export default function SettingsPage() {
   const isProduction = config.environment === "production";
