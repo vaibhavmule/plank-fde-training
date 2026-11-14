@@ -1,4 +1,10 @@
-import { Badge } from "@/components/ui/badge";
+import Link from "next/link";
+
+import {
+  PriorityBadge,
+  requestLabel,
+  StatusBadge,
+} from "@/components/request-badges";
 import {
   Table,
   TableBody,
@@ -9,10 +15,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { WorkRequest } from "@/lib/request-model";
-
-function label(value: string) {
-  return value[0].toUpperCase() + value.slice(1).replaceAll("_", " ");
-}
 
 export function RequestsTable({ requests }: { requests: WorkRequest[] }) {
   if (requests.length === 0) {
@@ -44,24 +46,19 @@ export function RequestsTable({ requests }: { requests: WorkRequest[] }) {
         {requests.map((request) => (
           <TableRow key={request.id}>
             <TableCell className="min-w-48 max-w-sm font-medium whitespace-normal break-words">
-              {request.title}
-            </TableCell>
-            <TableCell>{label(request.team)}</TableCell>
-            <TableCell>
-              <Badge
-                variant={
-                  request.priority === "high" ? "destructive" : "secondary"
-                }
+              <Link
+                href={`/requests/${request.id}`}
+                className="underline-offset-4 hover:underline"
               >
-                {label(request.priority)}
-              </Badge>
+                {request.title}
+              </Link>
+            </TableCell>
+            <TableCell>{requestLabel(request.team)}</TableCell>
+            <TableCell>
+              <PriorityBadge priority={request.priority} />
             </TableCell>
             <TableCell>
-              <Badge
-                variant={request.status === "open" ? "default" : "outline"}
-              >
-                {label(request.status)}
-              </Badge>
+              <StatusBadge status={request.status} />
             </TableCell>
             <TableCell>
               <time dateTime={request.createdAt}>
