@@ -15,6 +15,9 @@ a second Next.js app in the same pnpm workspace.
   individual steps
 - `pnpm --filter workbot-site dev` – the site on port 3001
 - `pnpm --filter workbot-site check` – the site's lint, typecheck and build
+- `pnpm chat` – WorkBot in the terminal, reading keys from `.env.local`
+- `pnpm test:live` – calls the real model API; run it after changing the system
+  prompt or a provider, never as part of `pnpm check`
 - `pnpm dlx shadcn@latest add <component>` – add a UI component
 
 ## Conventions
