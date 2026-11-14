@@ -1,8 +1,7 @@
-import { cookies } from "next/headers";
 import { after } from "next/server";
 
 import { config } from "@/lib/config";
-import { VISITOR_COOKIE } from "@/lib/visitor";
+import { visitorId } from "@/lib/visitor";
 
 export type AnalyticsEvent =
   | "request_form_viewed"
@@ -23,7 +22,7 @@ export async function track(
 ) {
   if (!config.posthogKey) return;
 
-  const visitor = (await cookies()).get(VISITOR_COOKIE)?.value;
+  const visitor = await visitorId();
   if (!visitor) return;
 
   after(async () => {

@@ -25,4 +25,14 @@ export const schemaStatements = [
     body text not null,
     created_at timestamptz not null default now()
   )`,
+  // One sentence is one memory, whatever its kind: the unique index runs on
+  // the visitor and the text, not the kind.
+  `create table if not exists memories (
+    id uuid primary key default gen_random_uuid(),
+    visitor text not null,
+    kind text not null,
+    text text not null,
+    created_at timestamptz not null default now(),
+    unique (visitor, text)
+  )`,
 ];

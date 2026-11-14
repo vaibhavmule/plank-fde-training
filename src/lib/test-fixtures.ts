@@ -13,6 +13,11 @@ export async function resetNotes() {
   await query("delete from notes");
 }
 
+/** Empties the memories table between tests. */
+export async function resetMemories() {
+  await query("delete from memories");
+}
+
 /**
  * Inserts rows directly, so a test can set every column, including an id and a
  * `createdAt` the app would otherwise choose.

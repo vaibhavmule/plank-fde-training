@@ -29,7 +29,7 @@ export function SiteHeader() {
             Admin
           </Link>
           <Link
-            href="/admin/settings"
+            href="/settings"
             className={buttonVariants({ variant: "ghost" })}
           >
             Settings
