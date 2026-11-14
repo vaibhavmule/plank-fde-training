@@ -10,8 +10,9 @@ describe("SiteHeader", () => {
     expect(html).toContain("WorkBot");
   });
 
-  test("links to the home and settings pages", () => {
+  test("links to home, requests, and settings", () => {
     expect(html).toContain('href="/"');
     expect(html).toContain('href="/settings"');
+    expect(html).toContain('href="/requests"');
   });
 });

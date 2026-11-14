@@ -9,9 +9,20 @@ export function SiteHeader() {
         <Link href="/" className="text-lg font-semibold tracking-tight">
           WorkBot
         </Link>
-        <Link href="/settings" className={buttonVariants({ variant: "ghost" })}>
-          Settings
-        </Link>
+        <nav aria-label="Main navigation" className="flex items-center gap-1">
+          <Link
+            href="/requests"
+            className={buttonVariants({ variant: "ghost" })}
+          >
+            Requests
+          </Link>
+          <Link
+            href="/settings"
+            className={buttonVariants({ variant: "ghost" })}
+          >
+            Settings
+          </Link>
+        </nav>
       </div>
     </header>
   );
