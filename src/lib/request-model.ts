@@ -21,3 +21,12 @@ export const workRequestSchema = requestInputSchema.extend({
 });
 
 export type WorkRequest = z.infer<typeof workRequestSchema>;
+
+// Parses URL query values. A missing, repeated or unknown value means
+// "no filter", never an error; other query keys are dropped.
+export const requestFiltersSchema = z.object({
+  team: teamSchema.optional().catch(undefined),
+  status: statusSchema.optional().catch(undefined),
+});
+
+export type RequestFilters = z.infer<typeof requestFiltersSchema>;

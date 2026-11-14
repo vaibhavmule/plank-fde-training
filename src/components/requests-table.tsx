@@ -16,6 +16,10 @@ import {
 } from "@/components/ui/table";
 import type { WorkRequest } from "@/lib/request-model";
 
+export function label(value: string) {
+  return value[0].toUpperCase() + value.slice(1).replaceAll("_", " ");
+}
+
 export function RequestsTable({ requests }: { requests: WorkRequest[] }) {
   if (requests.length === 0) {
     return (

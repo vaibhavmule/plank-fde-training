@@ -1,19 +1,15 @@
 import Link from "next/link";
 import { Suspense } from "react";
 
-import { RequestsTable } from "@/components/requests-table";
+import { RequestsList } from "./requests-list";
 import { SiteHeader } from "@/components/site-header";
 import { buttonVariants } from "@/components/ui/button";
-import { listRequests } from "@/lib/requests";
 
 export const metadata = { title: "Requests" };
 
-async function RequestsList() {
-  const requests = await listRequests();
-  return <RequestsTable requests={requests} />;
-}
-
-export default function RequestsPage() {
+// The page stays synchronous: the query string is read inside the Suspense
+// boundary so the header and heading remain in the static shell.
+export default function RequestsPage({ searchParams }: PageProps<"/requests">) {
   return (
     <>
       <SiteHeader />
@@ -36,7 +32,7 @@ export default function RequestsPage() {
             </p>
           }
         >
-          <RequestsList />
+          <RequestsList searchParams={searchParams} />
         </Suspense>
       </main>
     </>
