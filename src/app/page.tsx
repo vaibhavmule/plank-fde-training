@@ -17,7 +17,10 @@ export default function Home() {
           automated flows your team can trust and audit.
         </p>
         <div className="flex flex-col gap-3 sm:flex-row">
-          <Link href="/settings" className={buttonVariants({ size: "lg" })}>
+          <Link
+            href="/admin/settings"
+            className={buttonVariants({ size: "lg" })}
+          >
             Open settings
           </Link>
           <Link

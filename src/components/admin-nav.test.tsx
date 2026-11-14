@@ -10,7 +10,7 @@ describe("AdminNav", () => {
   test.each([
     ["/admin", "Overview"],
     ["/requests", "Requests"],
-    ["/settings", "Settings"],
+    ["/admin/settings", "Settings"],
   ])("marks only the current destination active: %s", (pathname, label) => {
     location.pathname = pathname;
     const html = renderToStaticMarkup(<AdminNav />);
@@ -19,7 +19,7 @@ describe("AdminNav", () => {
     const currentLink = html.match(new RegExp(`<a [^>]*>${label}</a>`))?.[0];
     expect(currentLink).toContain(`href="${pathname}"`);
     expect(currentLink).toContain('aria-current="page"');
-    for (const href of ["/admin", "/requests", "/settings"]) {
+    for (const href of ["/admin", "/requests", "/admin/settings"]) {
       expect(html).toContain(`href="${href}"`);
     }
   });

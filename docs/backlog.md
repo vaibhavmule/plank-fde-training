@@ -12,9 +12,9 @@ Size: **S** = under 1 hour; **M** = 2–4 hours.
 | WB-6  | Create request intake form       | 3   | M    | Done      | WB-5       | Pending: intake         |
 | WB-7  | Display requests list            | 3   | S    | Done      | WB-5       | Pending: list           |
 | WB-8  | Expose requests API              | 3   | S    | Done      | WB-5       | N/A                     |
-| WB-9  | Create admin navigation          | 3   | S    | In review | —          | Pending: admin shell    |
+| WB-9  | Create admin navigation          | 3   | S    | Done      | —          | Pending: admin shell    |
 | WB-10 | Display admin overview           | 3   | S    | Backlog   | WB-5, WB-9 | Pending: overview       |
-| WB-11 | Move settings into admin         | 3   | S    | Backlog   | WB-9       | Pending: admin settings |
+| WB-11 | Move settings into admin         | 3   | S    | In review | WB-9       | Pending: admin settings |
 
 ## Acceptance criteria
 
