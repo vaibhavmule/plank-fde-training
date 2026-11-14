@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // The site app has its own ESLint config:
+    "site/**",
   ]),
 ]);
 
