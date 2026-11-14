@@ -7,7 +7,7 @@ disable-model-invocation: true
 
 Arguments: `$ARGUMENTS`. The first word is the route name, for example `echo`. Any further words are HTTP methods, uppercase, for example `POST`. Default to `GET` when none are given. Ask if the name is missing.
 
-Create three files in `src/app/api/<name>/`. Use `src/app/api/health/route.ts` as the style reference.
+Read `AGENTS.md`, `src/app/api/CLAUDE.md`, and the installed Next.js route-handler guide first. Create three files in `src/app/api/<name>/`. Use `src/app/api/requests/` as the contract and test reference, and `src/app/api/health/route.ts` for a minimal handler.
 
 1. `types.ts`: Zod schemas for the request and the response of each method, and the inferred types (`z.infer`). Import from `zod`.
 2. `route.ts`: one exported function per method, named after the method.
