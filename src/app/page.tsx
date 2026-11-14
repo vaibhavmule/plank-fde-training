@@ -1,21 +1,12 @@
 import Link from "next/link";
 
+import { SiteHeader } from "@/components/site-header";
 import { buttonVariants } from "@/components/ui/button";
 
 export default function Home() {
   return (
     <>
-      <header className="border-b">
-        <div className="mx-auto flex w-full max-w-3xl items-center justify-between px-4 py-4">
-          <span className="text-lg font-semibold tracking-tight">WorkBot</span>
-          <Link
-            href="/settings"
-            className={buttonVariants({ variant: "ghost" })}
-          >
-            Settings
-          </Link>
-        </div>
-      </header>
+      <SiteHeader />
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center gap-6 px-4 py-16">
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
           Workflows that run themselves.
