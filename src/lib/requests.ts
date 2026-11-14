@@ -7,6 +7,7 @@ import {
   requestIdSchema,
   requestInputSchema,
   statusSchema,
+  type RequestFilters,
   type WorkRequest,
 } from "@/lib/request-model";
 
@@ -33,10 +34,18 @@ export async function createRequest(input: unknown): Promise<WorkRequest> {
   return { ...request };
 }
 
-export async function listRequests(): Promise<WorkRequest[]> {
+export async function listRequests(
+  filters: RequestFilters = {},
+): Promise<WorkRequest[]> {
   await io();
   // Copies prevent callers from mutating the shared store.
-  return store().map((request) => ({ ...request }));
+  return store()
+    .filter(
+      (request) =>
+        (!filters.team || request.team === filters.team) &&
+        (!filters.status || request.status === filters.status),
+    )
+    .map((request) => ({ ...request }));
 }
 
 export async function getRequest(id: string): Promise<WorkRequest | undefined> {
