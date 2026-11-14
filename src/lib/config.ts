@@ -8,4 +8,6 @@ export const config = {
   databaseUrl: process.env.DATABASE_URL ?? "",
   posthogKey: process.env.POSTHOG_KEY ?? "",
   posthogHost: process.env.POSTHOG_HOST || "https://us.i.posthog.com",
+  anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
+  openaiApiKey: process.env.OPENAI_API_KEY ?? "",
 } as const;

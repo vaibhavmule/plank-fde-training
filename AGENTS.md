@@ -44,6 +44,10 @@ a second Next.js app in the same pnpm workspace.
 - **MCP servers:** `src/mcp/*` exports a factory that takes its client as an
   argument (`query`, `fetch`), so tests can run in process. The `mcp/*.ts` entry
   points at the repository root serve over stdio, and `.mcp.json` starts them.
+- **Model providers:** `src/lib/providers.ts` is the only module that calls an
+  SDK. Each factory returns a `Provider` whose first model is the default, and
+  list prices sit next to the model ids. Both factories take `apiKey` and
+  `fetch` overrides so tests stay offline.
 - Keep commits small, conventional (`feat:`, `fix:`, `chore:`) and imperative.
 - **Claude tooling in `.claude/`:** skills `/component`, `/api-route`, `/pre-deploy` and `/pr-review`; reviewer subagents `bug-hunter`, `performance-reviewer` and `security-reviewer` (run together by `/pr-review`); and a `PostToolUse` hook in `.claude/settings.json` that runs Prettier on every file edited with Edit or Write.
 - **Folder instructions:** `src/app/api/CLAUDE.md` defines route contracts and
