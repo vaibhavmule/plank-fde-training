@@ -10,6 +10,9 @@ export function SiteHeader() {
           WorkBot
         </Link>
         <nav aria-label="Main navigation" className="flex items-center gap-1">
+          <Link href="/chat" className={buttonVariants({ variant: "ghost" })}>
+            Chat
+          </Link>
           <Link
             href="/requests"
             className={buttonVariants({ variant: "ghost" })}

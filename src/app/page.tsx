@@ -17,9 +17,12 @@ export default function Home() {
           automated flows your team can trust and audit.
         </p>
         <div className="flex flex-col gap-3 sm:flex-row">
+          <Link href="/chat" className={buttonVariants({ size: "lg" })}>
+            Chat with WorkBot
+          </Link>
           <Link
             href="/admin/settings"
-            className={buttonVariants({ size: "lg" })}
+            className={buttonVariants({ variant: "outline", size: "lg" })}
           >
             Open settings
           </Link>
