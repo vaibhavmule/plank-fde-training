@@ -8,7 +8,7 @@ import { buttonVariants } from "@/components/ui/button";
 const links = [
   { href: "/admin", label: "Overview" },
   { href: "/requests", label: "Requests" },
-  { href: "/settings", label: "Settings" },
+  { href: "/admin/settings", label: "Settings" },
 ];
 
 export function AdminNav() {
