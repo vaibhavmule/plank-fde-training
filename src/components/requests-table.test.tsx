@@ -77,6 +77,21 @@ describe("RequestsTable", () => {
     }
   });
 
+  test("links each title, and only the title, to its detail page", () => {
+    const html = renderToStaticMarkup(
+      <RequestsTable
+        requests={[request, { ...request, id: "other", title: "Other" }]}
+      />,
+    );
+    expect(html).toMatch(
+      new RegExp(
+        `<a[^>]*href="/requests/${request.id}"[^>]*>Replace keyboard</a>`,
+      ),
+    );
+    expect(html).toMatch(/<a[^>]*href="\/requests\/other"[^>]*>Other<\/a>/);
+    expect(html.match(/<a /g)).toHaveLength(2);
+  });
+
   test("escapes user titles instead of rendering submitted HTML", () => {
     const html = renderToStaticMarkup(
       <RequestsTable

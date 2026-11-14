@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import { requestInputSchema, workRequestSchema } from "@/lib/request-model";
-import { createRequest, listRequests } from "@/lib/requests";
+import { createRequest, getRequest, listRequests } from "@/lib/requests";
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ io: vi.fn(async () => {}) }));
@@ -115,5 +115,28 @@ describe("request storage", () => {
     expect(await listRequests()).toEqual([
       expect.objectContaining({ title: input.title }),
     ]);
+  });
+
+  test("gets the record with a matching ID among several", async () => {
+    const first = await createRequest(input);
+    const second = await createRequest({ ...input, title: "Second" });
+    expect(await getRequest(first.id)).toEqual(first);
+    expect(await getRequest(second.id)).toEqual(second);
+  });
+
+  test("returns undefined for a missing ID, including on an empty store", async () => {
+    expect(await getRequest("missing")).toBeUndefined();
+    const created = await createRequest(input);
+    expect(await getRequest(created.id.toUpperCase())).toBeUndefined();
+    expect(await getRequest("")).toBeUndefined();
+  });
+
+  test("does not expose a fetched record to caller mutation", async () => {
+    const created = await createRequest(input);
+    const fetched = await getRequest(created.id);
+    fetched!.title = "Changed";
+    fetched!.status = "closed";
+    expect(await getRequest(created.id)).toEqual(created);
+    expect(await listRequests()).toEqual([created]);
   });
 });

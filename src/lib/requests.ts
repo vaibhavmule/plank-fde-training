@@ -33,3 +33,10 @@ export async function listRequests(): Promise<WorkRequest[]> {
   // Copies prevent callers from mutating the shared store.
   return store().map((request) => ({ ...request }));
 }
+
+export async function getRequest(id: string): Promise<WorkRequest | undefined> {
+  await io();
+  const request = store().find((candidate) => candidate.id === id);
+  // A copy, for the same reason as listRequests.
+  return request && { ...request };
+}
