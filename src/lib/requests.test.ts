@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import { requestInputSchema, workRequestSchema } from "@/lib/request-model";
-import { createRequest, getRequest, listRequests } from "@/lib/requests";
+import {
+  createRequest,
+  getRequest,
+  listRequests,
+  updateRequestStatus,
+} from "@/lib/requests";
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ io: vi.fn(async () => {}) }));
@@ -138,5 +143,81 @@ describe("request storage", () => {
     fetched!.status = "closed";
     expect(await getRequest(created.id)).toEqual(created);
     expect(await listRequests()).toEqual([created]);
+  });
+});
+
+describe("updateRequestStatus", () => {
+  test.each(["open", "in_progress", "closed"] as const)(
+    "moves a request to %s and preserves every other field",
+    async (status) => {
+      const created = await createRequest({
+        ...input,
+        details: "Keys stick",
+        priority: "high",
+      });
+
+      const updated = await updateRequestStatus(created.id, status);
+
+      expect(updated).toEqual({ ...created, status });
+      expect(await getRequest(created.id)).toEqual({ ...created, status });
+      expect(await listRequests()).toEqual([{ ...created, status }]);
+      expect(workRequestSchema.parse(updated)).toEqual(updated);
+    },
+  );
+
+  test("returns undefined for a missing request without adding a record", async () => {
+    await expect(
+      updateRequestStatus("3f1c9a34-9d5e-4b1d-8a58-1a2b3c4d5e6f", "closed"),
+    ).resolves.toBeUndefined();
+    expect(await listRequests()).toEqual([]);
+  });
+
+  test.each([
+    "cancelled",
+    "",
+    "OPEN",
+    "in-progress",
+    null,
+    undefined,
+    42,
+    { status: "closed" },
+  ])("rejects the invalid status %j without writing", async (status) => {
+    const created = await createRequest(input);
+    await expect(
+      updateRequestStatus(created.id, status),
+    ).resolves.toBeUndefined();
+    expect(await getRequest(created.id)).toEqual(created);
+  });
+
+  test.each(["not-a-uuid", "", "../requests", null, undefined, 42, {}])(
+    "rejects the invalid ID %j without writing",
+    async (id) => {
+      const created = await createRequest(input);
+      await expect(updateRequestStatus(id, "closed")).resolves.toBeUndefined();
+      expect(await getRequest(created.id)).toEqual(created);
+    },
+  );
+
+  test("leaves other requests untouched when one changes", async () => {
+    const kept = await createRequest({ ...input, title: "Untouched" });
+    const changed = await createRequest({ ...input, title: "Changed" });
+
+    await updateRequestStatus(changed.id, "in_progress");
+
+    expect(await getRequest(kept.id)).toEqual(kept);
+    expect(await listRequests()).toEqual([
+      { ...changed, status: "in_progress" },
+      kept,
+    ]);
+  });
+
+  test("does not expose the record to caller mutation", async () => {
+    const created = await createRequest(input);
+    const updated = await updateRequestStatus(created.id, "closed");
+    updated!.title = "Changed";
+    expect(await getRequest(created.id)).toEqual({
+      ...created,
+      status: "closed",
+    });
   });
 });

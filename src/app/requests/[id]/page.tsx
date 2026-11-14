@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
 import { RequestDetail } from "@/components/request-detail";
+import { RequestStatusForm } from "@/components/request-status-form";
 import { SiteHeader } from "@/components/site-header";
 import { buttonVariants } from "@/components/ui/button";
 import { getRequest } from "@/lib/requests";
@@ -12,7 +13,12 @@ export const metadata = { title: "Request" };
 async function RequestData({ id }: { id: string }) {
   const request = await getRequest(id);
   if (!request) notFound();
-  return <RequestDetail request={request} />;
+  return (
+    <div className="space-y-8">
+      <RequestDetail request={request} />
+      <RequestStatusForm request={request} />
+    </div>
+  );
 }
 
 export default function RequestPage({ params }: PageProps<"/requests/[id]">) {
