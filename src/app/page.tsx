@@ -37,6 +37,14 @@ export default function Home() {
           </Link>
         </div>
       </main>
+      <footer className="border-t">
+        <div className="text-muted-foreground mx-auto flex w-full max-w-3xl items-center justify-between px-4 py-6 text-sm">
+          <span>WorkBot · Enterprise workflow platform</span>
+          <Link href="/api/health" className="hover:text-foreground">
+            Status
+          </Link>
+        </div>
+      </footer>
     </>
   );
 }
