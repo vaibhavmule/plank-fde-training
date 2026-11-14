@@ -1,0 +1,225 @@
+import { stdin, stdout } from "node:process";
+import { createInterface } from "node:readline/promises";
+import { parseArgs } from "node:util";
+
+import {
+  ANTHROPIC_MODELS,
+  OPENAI_MODELS,
+  anthropic,
+  openai,
+  type Effort,
+  type Model,
+  type Provider,
+} from "@/lib/providers";
+import { Session, type SessionSettings } from "@/lib/session";
+import { SYSTEM_PROMPT } from "@/lib/system-prompt";
+
+// A separate program from the Next app, so it reads its own environment.
+const PROVIDERS: Record<
+  string,
+  {
+    key: string;
+    factory: (apiKey: string) => Provider;
+    models: readonly Model[];
+  }
+> = {
+  anthropic: {
+    key: "ANTHROPIC_API_KEY",
+    factory: (apiKey) => anthropic({ apiKey }),
+    models: ANTHROPIC_MODELS,
+  },
+  openai: {
+    key: "OPENAI_API_KEY",
+    factory: (apiKey) => openai({ apiKey }),
+    models: OPENAI_MODELS,
+  },
+};
+
+const EFFORTS: Effort[] = ["low", "medium", "high"];
+
+function build(name: string): Provider {
+  const entry = PROVIDERS[name];
+  if (!entry) {
+    throw new Error(
+      `Unknown provider "${name}". Try ${Object.keys(PROVIDERS).join(" or ")}.`,
+    );
+  }
+
+  const apiKey = process.env[entry.key] ?? "";
+  if (!apiKey) {
+    throw new Error(`${entry.key} is not set. Add it to .env.local.`);
+  }
+
+  return entry.factory(apiKey);
+}
+
+function message(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function help() {
+  console.log(`Commands:
+  /model                     list providers and models
+  /model <provider> [model]  switch for the rest of the conversation
+  /system                    show the system prompt
+  /system <text>             replace it
+  /cost                      tokens and dollars for this session
+  /help                      this list
+  /exit                      quit`);
+}
+
+function listModels(session: Session) {
+  for (const [name, entry] of Object.entries(PROVIDERS)) {
+    console.log(`${name}${name === session.provider.name ? " (current)" : ""}`);
+    for (const model of entry.models) {
+      const price = model.pricePerMillionTokens;
+      const mark = name === session.provider.name && model.id === session.model;
+      console.log(
+        `  ${mark ? "*" : " "} ${model.id.padEnd(20)} $${price.input}/$${price.output} per million`,
+      );
+    }
+  }
+}
+
+function reportCost(session: Session) {
+  const cost = session.cost();
+  if (cost.turns === 0) {
+    console.log("No turns yet, so nothing has been spent.");
+    return;
+  }
+
+  console.log(
+    `${cost.turns} ${cost.turns === 1 ? "turn" : "turns"} · ${cost.input} in · ${cost.output} out · $${cost.dollars.toFixed(6)}`,
+  );
+
+  if (cost.unpriced.length > 0) {
+    console.log(
+      `No published price for: ${cost.unpriced.join(", ")} — those turns are not in the dollar total.`,
+    );
+  }
+}
+
+async function main() {
+  const { values } = parseArgs({
+    options: {
+      provider: { type: "string", short: "p", default: "anthropic" },
+      model: { type: "string", short: "m" },
+      effort: { type: "string" },
+      temperature: { type: "string" },
+      "max-tokens": { type: "string" },
+    },
+  });
+
+  const effort = values.effort as Effort | undefined;
+  if (effort && !EFFORTS.includes(effort)) {
+    throw new Error(
+      `--effort must be one of ${EFFORTS.join(", ")}, got "${effort}".`,
+    );
+  }
+
+  const settings: SessionSettings = {};
+  if (effort) settings.effort = effort;
+  if (values.temperature !== undefined) {
+    const temperature = Number(values.temperature);
+    if (!Number.isFinite(temperature) || temperature < 0 || temperature > 2) {
+      throw new Error("--temperature must be a number between 0 and 2.");
+    }
+    settings.temperature = temperature;
+  }
+  if (values["max-tokens"] !== undefined) {
+    const maxTokens = Number(values["max-tokens"]);
+    if (!Number.isInteger(maxTokens) || maxTokens <= 0) {
+      throw new Error("--max-tokens must be a whole number above zero.");
+    }
+    settings.maxTokens = maxTokens;
+  }
+
+  const providerName = values.provider;
+  const session = new Session({
+    provider: build(providerName),
+    model: values.model,
+    system: SYSTEM_PROMPT,
+    settings,
+  });
+
+  if (settings.temperature !== undefined && providerName === "anthropic") {
+    console.log(
+      "Note: Claude models reject temperature, so --temperature does not apply here. Use --effort instead.",
+    );
+  }
+
+  console.log(
+    `WorkBot · ${session.provider.name}/${session.model} · /help for commands, /exit to leave.`,
+  );
+
+  const lines = createInterface({ input: stdin, output: stdout });
+
+  for await (const line of lines) {
+    const text = line.trim();
+    if (text === "") continue;
+    if (text === "/exit" || text === "/quit") break;
+
+    if (text === "/help") {
+      help();
+      continue;
+    }
+
+    if (text === "/cost") {
+      reportCost(session);
+      continue;
+    }
+
+    if (text === "/system") {
+      console.log(session.system);
+      continue;
+    }
+
+    if (text.startsWith("/system ")) {
+      session.setSystem(text.slice("/system ".length).trim());
+      console.log("System prompt replaced for the rest of the conversation.");
+      continue;
+    }
+
+    if (text === "/model") {
+      listModels(session);
+      continue;
+    }
+
+    if (text.startsWith("/model ")) {
+      const [, name, model] = text.split(/\s+/);
+      try {
+        session.use(build(name), model);
+        const known = session.provider.models.some(
+          (entry) => entry.id === session.model,
+        );
+        console.log(
+          `Now answering as ${session.provider.name}/${session.model}.${known ? "" : " No published price for that model."}`,
+        );
+      } catch (error) {
+        console.log(`Could not switch: ${message(error)}`);
+      }
+      continue;
+    }
+
+    if (text.startsWith("/")) {
+      console.log(`Unknown command ${text.split(/\s+/)[0]}. /help lists them.`);
+      continue;
+    }
+
+    stdout.write("WorkBot: ");
+    try {
+      await session.send(text, (chunk) => stdout.write(chunk));
+      stdout.write("\n");
+    } catch (error) {
+      // Nothing from a failed turn is kept, so the conversation stays usable.
+      stdout.write(`\nThat turn failed: ${message(error)}\n`);
+    }
+  }
+
+  lines.close();
+}
+
+void main().catch((error: unknown) => {
+  console.error(message(error));
+  process.exitCode = 1;
+});
