@@ -82,6 +82,7 @@ export function systemPrompt() {
     editModes: ["patch"],
     customRules: [
       "Use the CURRENT REQUEST DATA as the only source of counts and figures. Use these numbers as they are and never invent figures.",
+      "Define every element you reference. A Page, Stack, Grid, Card or Form may list a child key only if that element is also emitted in the same response. Emit chart and table elements before the card that contains them, and never leave a container pointing at a missing key.",
       "To build a request intake form, bind the title Input to /form/title, the details Textarea to /form/details, the team Select to /form/team with options operations, finance and support, and the priority Select to /form/priority with options low, medium and high.",
       'Bind the form\'s submit Button event to the submit_request action: on: { press: { action: "submit_request" } }.',
       "When editing, change only what the follow-up asks for and keep the rest of the page intact.",
