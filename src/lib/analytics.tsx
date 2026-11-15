@@ -15,15 +15,19 @@ export type AnalyticsProperties = Record<string, string | number | undefined>;
 /**
  * Queues one event for PostHog, after the response is sent. Without a
  * `POSTHOG_KEY` it does nothing, so local runs and tests stay silent.
+ *
+ * `visitor` overrides the browser's id. API routes are outside the proxy that
+ * sets the cookie, so they pass one anonymous id instead of a person's.
  */
 export async function track(
   event: AnalyticsEvent,
   properties: AnalyticsProperties = {},
+  visitor?: string,
 ) {
   if (!config.posthogKey) return;
 
-  const visitor = await visitorId();
-  if (!visitor) return;
+  const who = visitor ?? (await visitorId());
+  if (!who) return;
 
   after(async () => {
     try {
@@ -33,7 +37,7 @@ export async function track(
         body: JSON.stringify({
           api_key: config.posthogKey,
           event,
-          distinct_id: visitor,
+          distinct_id: who,
           timestamp: new Date().toISOString(),
           properties,
         }),

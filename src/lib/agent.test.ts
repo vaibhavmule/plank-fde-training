@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import type { AgentToolEvent } from "@/lib/agent";
 import { DEFAULT_LIMITS, runAgent } from "@/lib/agent";
-import type { Tool } from "@/lib/tools";
+import { tool } from "@/lib/tools";
 
 type Reply =
   | { text: string }
@@ -70,19 +70,19 @@ function scripted(replies: Reply[]) {
   return model;
 }
 
-const lookup: Tool = {
+const lookup = tool({
   name: "lookup",
   description: "Look something up",
   input: z.object({ key: z.string() }),
   run: async ({ key }) => `value for ${key}`,
-};
+});
 
-const finish: Tool = {
+const finish = tool({
   name: "finish",
   description: "End the run with an answer",
   input: z.object({ answer: z.string() }),
   run: async ({ answer }) => answer,
-};
+});
 
 function setup(
   replies: Reply[],
@@ -146,14 +146,14 @@ describe("runAgent", () => {
   });
 
   test("a failing tool reaches the model as an error and the loop goes on", async () => {
-    const failing: Tool = {
+    const failing = tool({
       name: "lookup",
       description: "Always throws",
       input: z.object({ key: z.string() }),
       run: async () => {
         throw new Error("the store is down");
       },
-    };
+    });
 
     const { run } = setup(
       [
@@ -279,12 +279,12 @@ describe("runAgent", () => {
   });
 
   test("the time limit ends a slow tool call", async () => {
-    const slow: Tool = {
+    const slow = tool({
       name: "lookup",
       description: "Never finishes",
       input: z.object({ key: z.string() }),
       run: () => new Promise<string>(() => {}),
-    };
+    });
 
     const { run } = setup(
       [{ calls: [{ name: "lookup", input: { key: "a" } }] }],
