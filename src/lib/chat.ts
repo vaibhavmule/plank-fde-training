@@ -178,7 +178,8 @@ export async function handleChat(
 
   const visitor = options.visitor;
   const smallModel = options.smallModel ?? chatModel("small");
-  const memories = visitor ? await listMemories(visitor) : [];
+  // Memory is an enhancement: an unreachable store must not break the reply.
+  const memories = visitor ? await listMemories(visitor).catch(() => []) : [];
   const { messages: fitted, summary } = await compact(
     smallModel,
     messages.data,

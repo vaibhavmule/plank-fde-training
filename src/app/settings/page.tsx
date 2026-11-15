@@ -62,7 +62,23 @@ async function Memories() {
     );
   }
 
-  const memories = await listMemories(visitor);
+  let memories: Memory[];
+  try {
+    memories = await listMemories(visitor);
+  } catch {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Memory is unavailable</CardTitle>
+          <CardDescription>
+            WorkBot cannot reach its memory store right now. Conversations still
+            work; try again later.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
+
   if (memories.length === 0) {
     return (
       <Card>
