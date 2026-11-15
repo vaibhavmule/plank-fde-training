@@ -13,12 +13,14 @@
     "test": "vitest run",
     "test:live": "vitest run --config vitest.live.config.ts",
     "chat": "node --conditions=react-server --env-file-if-exists=.env.local --import tsx cli/chat.ts",
+    "explain": "node --conditions=react-server --env-file-if-exists=.env.local --import tsx cli/explain.ts",
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build && pnpm --filter workbot-site check"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.104",
     "@ai-sdk/openai": "^4.0.117",
     "@ai-sdk/react": "^4.0.176",
+    "@anthropic-ai/claude-agent-sdk": "^0.3.325",
     "@anthropic-ai/sdk": "^1.8.0",
     "@base-ui/react": "^1.9.0",
     "@electric-sql/pglite": "^0.5.16",
