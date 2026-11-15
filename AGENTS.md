@@ -44,6 +44,24 @@ a second Next.js app in the same pnpm workspace.
   Call `track()` from actions and render `Track` inside a `<Suspense>` boundary,
   because reading the visitor cookie is request-time work. Names are
   `snake_case`; properties name records (`requestId`, `team`), never people.
+- **The knowledge base:** `content/knowledge/<section>/<slug>.md` is the corpus,
+  and `src/lib/knowledge.ts` is the only module that reads it or writes the
+  `chunks` table. It chunks by `##` heading, so each hit is a section a person
+  could open, and searches by words always and by meaning when the index carries
+  embeddings. `src/lib/knowledge-tools.ts` presents that as the `find`, `ls`,
+  `cat` and `grep` tools, scoped by section: `customerSections` is what the
+  public web chat may read. `src/lib/embeddings.ts` talks to Voyage AI and takes
+  its key as an argument, so tests stay offline.
+- **Tool sets:** `employeeTools` (everything the knowledge base holds, plus
+  notes and web search) and `customerTools` (the customer sections, no notes, no
+  web search). Never hand the web chat `employeeTools` before Day 30 adds
+  sign-in. A tool's `run` parses its own input, so schema defaults apply to every
+  caller.
+- **Indexing:** `pnpm knowledge:index` rebuilds the chunks and reports the count;
+  `find` also builds an empty index on first use. pgvector is optional — without
+  the extension the table has no `embedding` column and search uses words.
+  `pnpm compare:retrieval` runs 10 questions through top-5 retrieval and the
+  agent and prints what each cost.
 - **MCP servers:** `src/mcp/*` exports a factory that takes its client as an
   argument (`query`, `fetch`), so tests can run in process. The `mcp/*.ts` entry
   points at the repository root serve over stdio, and `.mcp.json` starts them.
@@ -54,7 +72,7 @@ a second Next.js app in the same pnpm workspace.
 - Keep commits small, conventional (`feat:`, `fix:`, `chore:`) and imperative.
 - **Claude tooling in `.claude/`:** skills `/component`, `/api-route`, `/pre-deploy` and `/pr-review`; reviewer subagents `bug-hunter`, `performance-reviewer` and `security-reviewer` (run together by `/pr-review`); and a `PostToolUse` hook in `.claude/settings.json` that runs Prettier on every file edited with Edit or Write.
 - **Folder instructions:** `src/app/api/CLAUDE.md` defines route contracts and
-  tests. `content/policies/CLAUDE.md` defines the policy file format, required
+  tests. `content/knowledge/CLAUDE.md` defines the knowledge base format, required
   front matter and how to write a policy. `site/AGENTS.md` defines the public
   site's scope.
 

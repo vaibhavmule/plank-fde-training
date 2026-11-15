@@ -27,6 +27,26 @@ const TOOL_LABELS: Record<string, ToolLabel> = {
     done: "Read page",
   },
   save_note: { title: "Note", running: "Saving note…", done: "Saved note" },
+  find: {
+    title: "Knowledge search",
+    running: "Searching the knowledge base…",
+    done: "Searched the knowledge base",
+  },
+  ls: {
+    title: "Knowledge listing",
+    running: "Listing the knowledge base…",
+    done: "Listed the knowledge base",
+  },
+  cat: {
+    title: "Knowledge read",
+    running: "Reading the knowledge base…",
+    done: "Read the knowledge base",
+  },
+  grep: {
+    title: "Knowledge grep",
+    running: "Searching for an exact phrase…",
+    done: "Searched for an exact phrase",
+  },
 };
 
 function toolName(part: ChatToolPart) {

@@ -1,8 +1,9 @@
 ---
 title: "Travel Policy"
-team: operations
-updatedAt: 2026-11-03
+owner: Operations team
+updated: 2026-11-03
 summary: "How to book business travel, what the company pays for and how to claim it back."
+team: operations
 ---
 
 ## Booking travel

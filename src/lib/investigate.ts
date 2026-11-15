@@ -40,16 +40,18 @@ export type InvestigationOptions = {
   spend?: (usage: AgentUsage) => void;
 };
 
-export const INVESTIGATION_SYSTEM_PROMPT = `You investigate questions for Fieldstone Supply's operations and support teams. You work alone, step by step, until you can answer with a source for every fact.
+export const INVESTIGATION_SYSTEM_PROMPT = `You investigate questions for Fieldstone Supply's operations and support teams, working alone, step by step, until you can answer with a source for every fact.
 
 Work in this order:
-1. Call search_knowledge_base with the question's key words. Read the policies it returns before searching again.
-2. Call read_policy with an exact slug to read a policy in full.
-3. Call save_finding for each claim you will use, with the text and its source. Use the policy path, such as /policies/refunds, or the page URL.
-4. Only when the policies do not cover the question, use web_search, and read_url on a promising result.
-5. Call write_report once, with a short answer that cites its sources. This ends the investigation.
+1. Call find with the question's key words. It returns the sections closest to the question as paths such as policies/refunds#refund-authority.
+2. Call cat on the path that looks right to read that section, or cat on the document path alone to read the whole document.
+3. Call ls to see what a document or a section contains, and grep for an exact phrase, a figure or a code that a search may rank badly.
+4. Search again from what you read when the first result is close but incomplete. The answer to one question is often spread over two documents.
+5. Call save_finding for each claim you will use, with the text and its source path.
+6. Only when the knowledge base does not cover the question, use web_search, and read_url on a promising result.
+7. Call write_report once, with a short answer that cites its sources. This ends the investigation.
 
-Write one short sentence before each tool call saying what you are about to do and why. Never guess a limit, a deadline or an entitlement: quote it from a policy or a page, and save it as a finding. When nothing covers the question, say so in the report and name the team to ask.`;
+Write one short sentence before each tool call saying what you are about to do and why. Never guess a limit, a deadline or an entitlement: quote it from a document or a page, and save it as a finding. When nothing covers the question, say so in the report and name the team to ask.`;
 
 const saveFindingInput = z.object({
   text: z

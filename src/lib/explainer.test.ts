@@ -95,7 +95,7 @@ describe("foreground", () => {
   test("leaves a tool that is not Agent alone", () => {
     const output = foreground({
       ...pre({ question: "refund" }),
-      tool_name: "mcp__knowledge__search_knowledge_base",
+      tool_name: "mcp__knowledge__find",
     });
 
     expect(output).toEqual({ continue: true });
@@ -118,7 +118,7 @@ describe("guardrail", () => {
     const output = guardrail(
       post(
         researcher,
-        "A support agent may refund up to $200 per customer.\nA refund above that needs the support lead. [source: /policies/refunds]",
+        "A support agent may refund up to $200 per customer.\nA refund above that needs the support lead. [source: policies/refunds#refund-authority]",
       ),
     );
 
@@ -131,7 +131,7 @@ describe("guardrail", () => {
     const output = guardrail(
       post(
         researcher,
-        "## Facts\n\n- A support agent may refund up to $200 per customer. [source: /policies/refunds]\n- A refund above $200 needs written approval. [source: /policies/refunds]",
+        "## Facts\n\n- A support agent may refund up to $200 per customer. [source: policies/refunds#refund-authority]\n- A refund above $200 needs written approval. [source: policies/refunds#refund-authority]",
       ),
     );
 
@@ -167,7 +167,7 @@ describe("guardrail", () => {
 
   test("leaves a tool that is not Agent alone", () => {
     expect(
-      guardrail({ ...post({}, ""), tool_name: "mcp__knowledge__read_policy" }),
+      guardrail({ ...post({}, ""), tool_name: "mcp__knowledge__cat" }),
     ).toEqual({ continue: true });
   });
 });
@@ -188,7 +188,7 @@ describe("recordHook", () => {
     await record(
       {
         ...pre({ question: "refund limit" }, "researcher"),
-        tool_name: "mcp__knowledge__search_knowledge_base",
+        tool_name: "mcp__knowledge__find",
       } as HookInput,
       "tool-2",
       { signal: new AbortController().signal },
@@ -197,7 +197,7 @@ describe("recordHook", () => {
       {
         ...post(
           { subagent_type: "researcher" },
-          "Limit is $200. [source: /policies/refunds]",
+          "Limit is $200. [source: policies/refunds#refund-authority]",
         ),
       } as HookInput,
       "tool-1",
@@ -207,7 +207,7 @@ describe("recordHook", () => {
     expect(trace.map((event) => [event.agent, event.kind, event.name])).toEqual(
       [
         ["orchestrator", "handoff", "researcher"],
-        ["researcher", "call", "mcp__knowledge__search_knowledge_base"],
+        ["researcher", "call", "mcp__knowledge__find"],
         ["orchestrator", "handoff", "researcher"],
       ],
     );
@@ -224,8 +224,10 @@ describe("agentDefinitions", () => {
     expect(agents.writer.model).toBe("sonnet");
     expect(agents.editor.model).toBe("sonnet");
     expect(agents.researcher.tools).toEqual([
-      "mcp__knowledge__search_knowledge_base",
-      "mcp__knowledge__read_policy",
+      "mcp__knowledge__find",
+      "mcp__knowledge__ls",
+      "mcp__knowledge__cat",
+      "mcp__knowledge__grep",
     ]);
     expect(agents.writer.tools).toEqual([]);
     expect(agents.editor.tools).toEqual([]);
@@ -254,9 +256,13 @@ describe("explainOptions", () => {
     expect(options.mcpServers).toHaveProperty("knowledge");
     expect(options.maxTurns).toBe(24);
     expect(options.permissionMode).toBe("dontAsk");
-    expect(options.allowedTools).toContain(
-      "mcp__knowledge__search_knowledge_base",
-    );
+    expect(options.allowedTools).toEqual([
+      "Agent",
+      "mcp__knowledge__find",
+      "mcp__knowledge__ls",
+      "mcp__knowledge__cat",
+      "mcp__knowledge__grep",
+    ]);
     expect(options.hooks?.PreToolUse?.[0].matcher).toBe("Agent");
     expect(options.hooks?.PreToolUse?.[0].hooks).toHaveLength(1);
     expect(options.hooks?.PreToolUse?.[1].hooks).toHaveLength(1);

@@ -1,10 +1,12 @@
 import { MockLanguageModelV4 } from "ai/test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { z } from "zod";
 
 import type { AgentToolEvent } from "@/lib/agent";
 import { DEFAULT_LIMITS, runAgent } from "@/lib/agent";
 import { tool } from "@/lib/tools";
+
+vi.mock("server-only", () => ({}));
 
 type Reply =
   | { text: string }

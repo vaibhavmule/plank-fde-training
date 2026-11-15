@@ -19,8 +19,13 @@ import { knowledgeTools } from "@/lib/knowledge-tools";
 
 /** The in-process MCP server that serves the knowledge base tools. */
 const KNOWLEDGE_SERVER = "knowledge";
-export const SEARCH_TOOL = `mcp__${KNOWLEDGE_SERVER}__search_knowledge_base`;
-export const READ_TOOL = `mcp__${KNOWLEDGE_SERVER}__read_policy`;
+export const FIND_TOOL = `mcp__${KNOWLEDGE_SERVER}__find`;
+export const LS_TOOL = `mcp__${KNOWLEDGE_SERVER}__ls`;
+export const CAT_TOOL = `mcp__${KNOWLEDGE_SERVER}__cat`;
+export const GREP_TOOL = `mcp__${KNOWLEDGE_SERVER}__grep`;
+
+/** The knowledge tools the researcher may call, in the order it should use them. */
+export const RESEARCH_TOOLS = [FIND_TOOL, LS_TOOL, CAT_TOOL, GREP_TOOL];
 
 /** The SDK's built-in tool that runs a subagent. */
 export const AGENT_TOOL = "Agent";
@@ -38,9 +43,9 @@ export const RESEARCHER_MODEL = "haiku";
 export const WRITER_MODEL = "sonnet";
 export const EDITOR_MODEL = "sonnet";
 
-export const RESEARCHER_PROMPT = `You research one customer question for WorkBot. Search the company policies with search_knowledge_base, then read the policies that mention it with read_policy.
+export const RESEARCHER_PROMPT = `You research one customer question for WorkBot. Search the knowledge base with find, then read the sections that matter with cat, and use grep for an exact figure or phrase.
 
-List only facts that answer the question, one per line, and end every fact with its source in brackets, such as [source: /policies/refunds]. Never guess a limit, a deadline or an entitlement: quote it. When the policies do not cover the question, say so and name the team to ask.
+List only facts that answer the question, one per line, and end every fact with its source in brackets, such as [source: policies/refunds#refund-authority]. Never guess a limit, a deadline or an entitlement: quote it. When the knowledge base does not cover the question, say so and name the team to ask.
 
 Reply with the facts only.`;
 
@@ -118,7 +123,7 @@ const knowledgeServer = createSdkMcpServer({
   name: KNOWLEDGE_SERVER,
   version: "1.0.0",
   instructions:
-    "The company knowledge base. Search first, then read the policies that matter.",
+    "The company knowledge base, presented as a filesystem. Use find to locate a section, ls to see a document's shape, cat to read one section, and grep for an exact phrase.",
   tools: knowledgeTools().map((entry) =>
     sdkTool(entry.name, entry.description, entry.input.shape, async (args) => ({
       content: [{ type: "text", text: await entry.run(args) }],
@@ -134,7 +139,7 @@ export function agentDefinitions(
     researcher: {
       description:
         "Searches the company knowledge base and lists the facts that answer a customer's question, each with its source.",
-      tools: [SEARCH_TOOL, READ_TOOL],
+      tools: RESEARCH_TOOLS,
       prompt: RESEARCHER_PROMPT,
       model: model ?? RESEARCHER_MODEL,
     },
@@ -339,7 +344,7 @@ export function explainOptions(
     agents: agentDefinitions(model),
     mcpServers: { [KNOWLEDGE_SERVER]: knowledgeServer },
     tools: [AGENT_TOOL],
-    allowedTools: [AGENT_TOOL, SEARCH_TOOL, READ_TOOL],
+    allowedTools: [AGENT_TOOL, ...RESEARCH_TOOLS],
     permissionMode: "dontAsk",
     maxTurns: MAX_TURNS,
     hooks: {

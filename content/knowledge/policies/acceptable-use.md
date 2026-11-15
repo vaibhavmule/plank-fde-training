@@ -1,8 +1,9 @@
 ---
 title: "Acceptable Use Policy"
-team: operations
-updatedAt: 2026-09-02
+owner: Security team
+updated: 2026-09-02
 summary: "Rules for using WorkBot systems, accounts and data responsibly."
+team: operations
 ---
 
 ## Purpose

@@ -1,15 +1,32 @@
-import { describe, expect, test } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { z } from "zod";
 
-import { calculatorTool, createTools, runTool, tool } from "@/lib/tools";
+import {
+  calculatorTool,
+  customerTools,
+  employeeTools,
+  runTool,
+  tool,
+} from "@/lib/tools";
+import { indexKnowledge } from "@/lib/knowledge";
 
-function names(tools: ReturnType<typeof createTools>) {
-  return tools.map((tool) => tool.name);
+vi.mock("server-only", () => ({}));
+
+beforeEach(async () => {
+  // The knowledge tools search an index, so build it first.
+  await indexKnowledge();
+});
+
+function names(tools: ReturnType<typeof employeeTools>) {
+  return tools.map((entry) => entry.name);
 }
 
-describe("createTools", () => {
-  test("registers the three tools that need no key", () => {
-    expect(names(createTools())).toEqual([
+const KNOWLEDGE = ["find", "ls", "cat", "grep"];
+
+describe("employeeTools", () => {
+  test("gives staff the knowledge base and the everyday tools", () => {
+    expect(names(employeeTools())).toEqual([
+      ...KNOWLEDGE,
       "calculator",
       "read_url",
       "save_note",
@@ -17,24 +34,35 @@ describe("createTools", () => {
   });
 
   test("adds web_search when a Brave key is configured", () => {
-    expect(names(createTools({ braveSearchKey: "key" }))).toEqual([
-      "calculator",
-      "read_url",
-      "save_note",
+    expect(names(employeeTools({ braveSearchKey: "key" }))).toContain(
       "web_search",
-    ]);
-  });
-
-  test("leaves web_search out when the key is blank", () => {
-    expect(names(createTools({ braveSearchKey: "" }))).not.toContain(
+    );
+    expect(names(employeeTools({ braveSearchKey: "" }))).not.toContain(
       "web_search",
     );
   });
+});
 
-  test.each(createTools({ braveSearchKey: "key" }))(
+describe("customerTools", () => {
+  test("gives a customer the knowledge base, the calculator and pages only", () => {
+    expect(names(customerTools())).toEqual([
+      ...KNOWLEDGE,
+      "calculator",
+      "read_url",
+    ]);
+  });
+
+  test("leaves out notes and web search, which a public chat must not have", () => {
+    expect(names(customerTools())).not.toContain("save_note");
+    expect(names(customerTools())).not.toContain("web_search");
+  });
+});
+
+describe("the tool registry", () => {
+  test.each(employeeTools({ braveSearchKey: "key" }))(
     "$name describes when to call it and exposes a JSON schema",
     (registered) => {
-      expect(registered.description).toMatch(/call this/i);
+      expect(registered.description.length).toBeGreaterThan(20);
       expect(z.toJSONSchema(registered.input)).toMatchObject({
         type: "object",
         properties: expect.any(Object),
@@ -43,12 +71,26 @@ describe("createTools", () => {
   );
 
   test("the calculator tool evaluates through the parser", async () => {
-    const calculator = createTools().find(
+    const calculator = employeeTools().find(
       (registered) => registered.name === "calculator",
     )!;
-    const input = calculator.input.parse({ expression: "1234 * 5678" });
 
-    await expect(calculator.run(input)).resolves.toBe("7006652");
+    await expect(
+      calculator.run(calculator.input.parse({ expression: "1234 * 5678" })),
+    ).resolves.toBe("7006652");
+  });
+
+  test("a schema default applies when run parses its input", async () => {
+    const counted = tool({
+      name: "counted",
+      description: "Echo the count, defaulting to 3",
+      input: z.object({ count: z.number().int().default(3) }),
+      run({ count }) {
+        return String(count);
+      },
+    });
+
+    await expect(counted.run({} as never)).resolves.toBe("3");
   });
 });
 

@@ -1,8 +1,9 @@
 ---
 title: "Time Off Policy"
-team: support
-updatedAt: 2026-05-15
+owner: People team
+updated: 2026-05-15
 summary: "How to request holiday, sick leave and other time away from work."
+team: support
 ---
 
 ## Holiday

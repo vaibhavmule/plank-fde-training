@@ -1,8 +1,9 @@
 ---
 title: "Expense Reimbursement Policy"
-team: finance
-updatedAt: 2026-10-06
+owner: Finance team
+updated: 2026-10-06
 summary: "What you can claim, the limits, and how to submit an expense."
+team: finance
 ---
 
 ## What you can claim

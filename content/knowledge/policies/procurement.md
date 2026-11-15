@@ -1,8 +1,9 @@
 ---
 title: "Procurement Policy"
-team: finance
-updatedAt: 2026-06-24
+owner: Finance team
+updated: 2026-06-24
 summary: "How to buy software, services and equipment for the company."
+team: finance
 ---
 
 ## Before you buy
