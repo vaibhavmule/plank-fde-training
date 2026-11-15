@@ -1,8 +1,10 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
 import type { Completion, Model, Provider, ToolCall } from "./providers";
 import { Session } from "./session";
 import { calculatorTool } from "./tools";
+
+vi.mock("server-only", () => ({}));
 
 const MODELS: readonly Model[] = [
   { id: "fast", pricePerMillionTokens: { input: 1, output: 2 } },

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import { anthropic, openrouter, type ToolCall } from "./providers";
-import { createTools } from "./tools";
+import { employeeTools } from "./tools";
 
 // Calls the real API. Run with `pnpm test:live`, never as part of `pnpm test`.
 describe.each([
@@ -26,7 +26,7 @@ describe.each([
         system:
           "Use the calculator tool for every calculation, then answer with the result.",
         messages: [{ role: "user", content: "What is 1234 * 5678?" }],
-        tools: createTools(),
+        tools: employeeTools(),
         maxTokens: 512,
       },
       {

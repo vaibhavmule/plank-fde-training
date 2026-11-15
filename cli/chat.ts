@@ -18,7 +18,7 @@ import { investigate } from "@/lib/investigate";
 import { research } from "@/lib/research";
 import { Session, type SessionSettings } from "@/lib/session";
 import { SYSTEM_PROMPT } from "@/lib/system-prompt";
-import { createTools } from "@/lib/tools";
+import { employeeTools } from "@/lib/tools";
 
 // A separate program from the Next app, so it reads its own environment.
 const PROVIDERS: Record<
@@ -169,7 +169,7 @@ async function main() {
     model: values.model,
     system: SYSTEM_PROMPT,
     settings,
-    tools: createTools({
+    tools: employeeTools({
       braveSearchKey: process.env.BRAVE_SEARCH_KEY ?? "",
     }),
   });

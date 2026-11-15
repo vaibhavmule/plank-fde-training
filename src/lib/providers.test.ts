@@ -1,5 +1,5 @@
 import type { MessageStreamEvent } from "@anthropic-ai/sdk/resources/messages/messages";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
 import {
   anthropic,
@@ -9,6 +9,8 @@ import {
   type ToolCall,
 } from "./providers";
 import { calculatorTool } from "./tools";
+
+vi.mock("server-only", () => ({}));
 
 type Call = { url: string; headers: Headers; body: Record<string, unknown> };
 

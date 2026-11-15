@@ -26,7 +26,7 @@ import {
 } from "@/lib/memory";
 import { ANTHROPIC_MODELS, OPENAI_MODELS } from "@/lib/providers";
 import { SYSTEM_PROMPT } from "@/lib/system-prompt";
-import { createTools } from "@/lib/tools";
+import { customerTools } from "@/lib/tools";
 
 /** The rounds the terminal has allowed since Day 7. */
 export const MAX_STEPS = 8;
@@ -65,9 +65,13 @@ export function chatModel(modelId?: string): LanguageModel {
   return anthropicProvider.languageModel(id);
 }
 
-/** The Day 7 registry in the SDK's tool shape, so both clients share one set. */
+/**
+ * The web chat's tools in the SDK's shape. It is public until Day 30 adds
+ * sign-in, so it gets the customer set: the knowledge base narrowed to the
+ * sections a customer may read, the calculator and page reading.
+ */
 export const chatTools: ToolSet = Object.fromEntries(
-  createTools({ braveSearchKey: config.braveSearchKey }).map((entry) => [
+  customerTools().map((entry) => [
     entry.name,
     tool({
       description: entry.description,

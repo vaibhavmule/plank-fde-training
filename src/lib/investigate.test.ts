@@ -1,18 +1,23 @@
 import { MockLanguageModelV4 } from "ai/test";
-import { describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import type { AgentToolEvent } from "@/lib/agent";
 import { investigate, stoppedBeforeReport } from "@/lib/investigate";
+import { indexKnowledge } from "@/lib/knowledge";
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ cacheLife: vi.fn() }));
+
+beforeEach(async () => {
+  await indexKnowledge();
+});
 
 const QUESTION = "Can a support agent approve a $250 refund alone?";
 
 const REPORT = `Yes, but only with written approval. A support agent may refund up to $200 per customer, so $250 needs the support lead's approval.
 
 Sources:
-- /policies/refunds`;
+- policies/refunds#larger-refunds`;
 
 type Reply =
   | { text: string }
@@ -82,23 +87,23 @@ function collect() {
 }
 
 describe("investigate", () => {
-  test("searches, reads a policy, saves findings and writes a sourced report", async () => {
+  test("finds, reads a section, saves findings and writes a sourced report", async () => {
     const { on, thoughts, calls } = collect();
 
     const result = await investigate({
       model: scripted([
         {
           text: "I'll search the knowledge base for refund limits.",
-          calls: [
-            {
-              name: "search_knowledge_base",
-              input: { question: "refund limit" },
-            },
-          ],
+          calls: [{ name: "find", input: { query: "refund limit" } }],
         },
         {
-          text: "I'll read the refunds policy in full.",
-          calls: [{ name: "read_policy", input: { slug: "refunds" } }],
+          text: "I'll read the refund authority section.",
+          calls: [
+            {
+              name: "cat",
+              input: { path: "policies/refunds#refund-authority" },
+            },
+          ],
         },
         {
           text: "I'll save the limit with its source.",
@@ -107,7 +112,7 @@ describe("investigate", () => {
               name: "save_finding",
               input: {
                 text: "A support agent may refund up to $200 per customer without approval.",
-                source: "/policies/refunds",
+                source: "policies/refunds#refund-authority",
               },
             },
           ],
@@ -128,24 +133,24 @@ describe("investigate", () => {
     expect(result.findings).toEqual([
       {
         text: "A support agent may refund up to $200 per customer without approval.",
-        source: "/policies/refunds",
+        source: "policies/refunds#refund-authority",
       },
     ]);
     expect(calls.map((call) => call.name)).toEqual([
-      "search_knowledge_base",
-      "read_policy",
+      "find",
+      "cat",
       "save_finding",
       "write_report",
     ]);
     expect(thoughts).toEqual([
       "I'll search the knowledge base for refund limits.",
-      "I'll read the refunds policy in full.",
+      "I'll read the refund authority section.",
       "I'll save the limit with its source.",
       "I have what I need, so I'll write the report.",
     ]);
 
-    // The search found the refunds policy and the read returned the limit.
-    expect(calls[0].result).toContain("refunds — Refund Policy");
+    // The search found the refunds section and the read returned the limit.
+    expect(calls[0].result).toContain("policies/refunds");
     expect(calls[1].result).toContain("$200");
   });
 
@@ -158,12 +163,12 @@ describe("investigate", () => {
               name: "save_finding",
               input: {
                 text: "Refunds above $200 need the support lead.",
-                source: "/policies/refunds",
+                source: "policies/refunds#larger-refunds",
               },
             },
           ],
         },
-        { calls: [{ name: "read_policy", input: { slug: "refunds" } }] },
+        { calls: [{ name: "cat", input: { path: "policies/refunds" } }] },
       ]),
       modelId: "claude-haiku-5-5",
       question: QUESTION,
@@ -172,16 +177,16 @@ describe("investigate", () => {
 
     expect(result.stopped).toBe("steps");
     expect(result.report).toBe(
-      "The investigation stopped (steps) before a report was written.\n\nFindings so far:\n- Refunds above $200 need the support lead. — /policies/refunds",
+      "The investigation stopped (steps) before a report was written.\n\nFindings so far:\n- Refunds above $200 need the support lead. — policies/refunds#larger-refunds",
     );
   });
 
-  test("an unknown policy slug comes back as an error and the run goes on", async () => {
+  test("an unknown document path comes back as an error and the run goes on", async () => {
     const { on, calls } = collect();
 
     const result = await investigate({
       model: scripted([
-        { calls: [{ name: "read_policy", input: { slug: "refundz" } }] },
+        { calls: [{ name: "cat", input: { path: "policies/refundz" } }] },
         {
           calls: [
             { name: "write_report", input: { report: "No policy covers it." } },
@@ -195,7 +200,7 @@ describe("investigate", () => {
 
     expect(result.stopped).toBe("answered");
     expect(calls[0].failed).toBe(true);
-    expect(calls[0].result).toContain("no policy with the slug");
+    expect(calls[0].result).toContain("There is no document at");
     expect(result.report).toBe("No policy covers it.");
   });
 
