@@ -1,17 +1,18 @@
-import { z } from "zod";
+import { z, type ZodObject } from "zod";
 
 import { evaluate } from "@/lib/calculator";
 import { noteInputSchema } from "@/lib/note-model";
 import { readPage, searchWeb } from "@/lib/web";
 
-export type Tool<S extends z.ZodType = z.ZodType> = {
+// An object schema, because the Agent SDK builds its tools from `.shape`.
+export type Tool<S extends ZodObject = ZodObject> = {
   name: string;
   description: string;
   input: S;
   run(input: z.infer<S>): Promise<string>;
 };
 
-export function tool<S extends z.ZodType>(definition: {
+export function tool<S extends ZodObject>(definition: {
   name: string;
   description: string;
   input: S;

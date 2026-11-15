@@ -9,7 +9,7 @@ import {
   type AgentStop,
   type AgentUsage,
 } from "@/lib/agent";
-import { loadPolicy, searchPolicies } from "@/lib/policies";
+import { knowledgeTools } from "@/lib/knowledge-tools";
 import { readUrlTool, tool, webSearchTool, type Tool } from "@/lib/tools";
 
 /** One fact the agent kept, with where it came from. */
@@ -50,23 +50,6 @@ Work in this order:
 5. Call write_report once, with a short answer that cites its sources. This ends the investigation.
 
 Write one short sentence before each tool call saying what you are about to do and why. Never guess a limit, a deadline or an entitlement: quote it from a policy or a page, and save it as a finding. When nothing covers the question, say so in the report and name the team to ask.`;
-
-const searchInput = z.object({
-  question: z
-    .string()
-    .trim()
-    .min(1)
-    .max(400)
-    .describe("The words to look for in the company policies"),
-});
-
-const readPolicyInput = z.object({
-  slug: z
-    .string()
-    .trim()
-    .min(1)
-    .describe("The policy slug, exactly as search_knowledge_base returned it"),
-});
 
 const saveFindingInput = z.object({
   text: z
@@ -116,41 +99,7 @@ function investigationTools(
   options: InvestigationOptions,
 ): Tool[] {
   const tools: Tool[] = [
-    tool({
-      name: "search_knowledge_base",
-      description:
-        "Search the company policies for a question. Call this first. It returns the matching policies with their slugs and the lines that matched; read the most promising one with read_policy.",
-      input: searchInput,
-      async run({ question }) {
-        const matches = await searchPolicies(question);
-        if (matches.length === 0) {
-          return `No policy mentions "${question}". Try different words, or the web when the policies do not cover it.`;
-        }
-
-        return matches
-          .map(
-            (match) =>
-              `${match.slug} — ${match.title}: ${match.summary}\n${match.lines
-                .map((line) => `  ${line}`)
-                .join("\n")}`,
-          )
-          .join("\n\n");
-      },
-    }),
-    tool({
-      name: "read_policy",
-      description:
-        "Read one company policy in full by its exact slug. Call this after search_knowledge_base names a policy that could answer the question.",
-      input: readPolicyInput,
-      async run({ slug }) {
-        const policy = await loadPolicy(slug);
-        if (!policy) {
-          throw new Error(`There is no policy with the slug "${slug}".`);
-        }
-
-        return `${policy.title} (${policy.team}, updated ${policy.updatedAt})\nSource: /policies/${policy.slug}\n\n${policy.body}`;
-      },
-    }),
+    ...knowledgeTools(),
     tool({
       name: "save_finding",
       description:
