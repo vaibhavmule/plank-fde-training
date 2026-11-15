@@ -114,7 +114,13 @@ async function main() {
   await ensureIndexed(embedder);
 
   const agentModel = sdkModel("anthropic", modelId);
-  if (!agentModel) throw new Error(`No adapter for ${modelId}.`);
+  const specialistModel = sdkModel(
+    "anthropic",
+    ANTHROPIC_MODELS[ANTHROPIC_MODELS.length - 1].id,
+  );
+  if (!agentModel || !specialistModel) {
+    throw new Error(`No adapter for ${modelId}.`);
+  }
 
   console.log(
     `Comparing retrieval on ${QUESTIONS.length} questions with ${modelId}.`,
@@ -132,10 +138,9 @@ async function main() {
     baselineInput += fromChunks.input;
     baselineOutput += fromChunks.output;
 
-    const investigation = await investigate({
-      model: agentModel,
-      modelId,
-      question,
+    const investigation = await investigate(question, {
+      analyst: agentModel,
+      specialist: specialistModel,
     });
 
     agentInput += investigation.usage.input;
@@ -145,7 +150,7 @@ async function main() {
       `\nTop-${CHUNKS} retrieval\n${fromChunks.text}\n\n(${fromChunks.input} in, ${fromChunks.output} out, ${dollars(modelId, fromChunks)})\n`,
     );
     stdout.write(
-      `\nAgent with find, cat and grep\n${investigation.report}\n\n(${investigation.usage.input} in, ${investigation.usage.output} out, $${investigation.dollars.toFixed(6)}, ${investigation.steps} steps, stopped: ${investigation.stopped})\n`,
+      `\nAgent with ask_knowledge_base and ask_web\n${investigation.report}\n\n(${investigation.usage.input} in, ${investigation.usage.output} out, $${investigation.total.toFixed(6)}, ${investigation.steps} steps, stopped: ${investigation.stopped})\n`,
     );
   }
 

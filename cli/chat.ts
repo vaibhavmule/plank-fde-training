@@ -14,7 +14,7 @@ import {
   type Model,
   type Provider,
 } from "@/lib/providers";
-import { investigate } from "@/lib/investigate";
+import { investigate, type Entry } from "@/lib/investigate";
 import { research } from "@/lib/research";
 import { Session, type SessionSettings } from "@/lib/session";
 import { SYSTEM_PROMPT } from "@/lib/system-prompt";
@@ -82,6 +82,24 @@ function preview(value: unknown, limit = 160) {
         : JSON.stringify(value);
   const flat = text.replace(/\s+/g, " ").trim();
   return flat.length > limit ? `${flat.slice(0, limit)}…` : flat;
+}
+
+/** One log entry on one line: the time, the agent, then what it did. */
+function logLine(entry: Entry) {
+  const time = entry.at.slice(11, 19);
+
+  if (entry.kind === "thought") {
+    return dim(`${time} ${entry.agent} · ${preview(entry.text, 200)}`);
+  }
+  if (entry.kind === "tool") {
+    return dim(
+      `${time} ${entry.agent} ⚙ ${entry.name} ${preview(entry.input)}${entry.failed ? " (failed)" : ""}`,
+    );
+  }
+
+  return dim(
+    `${time} ${entry.agent} ✓ ${entry.outcome} · ${entry.steps} ${entry.steps === 1 ? "step" : "steps"} · $${entry.dollars.toFixed(6)}`,
+  );
 }
 
 function help() {
@@ -266,7 +284,10 @@ async function main() {
       }
 
       const model = sdkModel(session.provider.name, session.model);
-      if (!model) {
+      const providerModels = PROVIDERS[session.provider.name].models;
+      const specialistId = providerModels[providerModels.length - 1].id;
+      const specialist = sdkModel(session.provider.name, specialistId);
+      if (!model || !specialist) {
         console.log(
           `No agent adapter for ${session.provider.name}. Switch to anthropic or openai with /model.`,
         );
@@ -274,27 +295,24 @@ async function main() {
       }
 
       try {
-        const result = await investigate({
-          model,
-          modelId: session.model,
+        const result = await investigate(
           question,
-          braveSearchKey: process.env.BRAVE_SEARCH_KEY ?? "",
-          spend: (usage) => session.record(session.model, usage),
-          on: {
-            thought: (thought) => console.log(dim(`\n· ${thought}`)),
-            tool: (call) =>
-              console.log(
-                dim(
-                  `  → ${call.name} ${preview(call.input)}${call.failed ? " (failed)" : ""}\n    ${preview(call.result, 160)}`,
-                ),
+          { analyst: model, specialist },
+          {
+            braveSearchKey: process.env.BRAVE_SEARCH_KEY ?? "",
+            spend: (agent, usage) =>
+              session.record(
+                agent === "analyst" ? session.model : specialistId,
+                usage,
               ),
+            on: { log: (entry) => console.log(logLine(entry)) },
           },
-        });
+        );
 
         stdout.write(`\n${result.report}\n`);
         console.log(
           dim(
-            `\n${result.steps} ${result.steps === 1 ? "step" : "steps"} · stopped: ${result.stopped} · $${result.dollars.toFixed(6)} · ${result.findings.length} ${result.findings.length === 1 ? "finding" : "findings"}`,
+            `\nanalyst $${result.cost.analyst.toFixed(6)} · knowledge $${result.cost.knowledge.toFixed(6)} · web $${result.cost.web.toFixed(6)} · total $${result.total.toFixed(6)} · ${result.findings.length} ${result.findings.length === 1 ? "finding" : "findings"}`,
           ),
         );
       } catch (error) {
