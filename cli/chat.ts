@@ -9,10 +9,12 @@ import {
   anthropic,
   openai,
   openrouter,
+  sdkModel,
   type Effort,
   type Model,
   type Provider,
 } from "@/lib/providers";
+import { investigate } from "@/lib/investigate";
 import { research } from "@/lib/research";
 import { Session, type SessionSettings } from "@/lib/session";
 import { SYSTEM_PROMPT } from "@/lib/system-prompt";
@@ -70,6 +72,18 @@ function dim(text: string) {
   return stdout.isTTY ? `\x1b[2m${text}\x1b[0m` : text;
 }
 
+/** A tool's input or result on one line, cut so a report is not printed twice. */
+function preview(value: unknown, limit = 160) {
+  const text =
+    typeof value === "string"
+      ? value
+      : value === undefined
+        ? ""
+        : JSON.stringify(value);
+  const flat = text.replace(/\s+/g, " ").trim();
+  return flat.length > limit ? `${flat.slice(0, limit)}…` : flat;
+}
+
 function help() {
   console.log(`Commands:
   /model                     list providers and models
@@ -77,6 +91,7 @@ function help() {
   /system                    show the system prompt
   /system <text>             replace it
   /research <question>       research policies and the web, with citations
+  /investigate <question>    run the investigation agent, with sourced findings
   /cost                      tokens and dollars for this session
   /help                      this list
   /exit                      quit`);
@@ -239,6 +254,51 @@ async function main() {
         stdout.write("\n");
       } catch (error) {
         console.log(`Research failed: ${message(error)}`);
+      }
+      continue;
+    }
+
+    if (text === "/investigate" || text.startsWith("/investigate ")) {
+      const question = text.slice("/investigate".length).trim();
+      if (!question) {
+        console.log("Usage: /investigate <question>");
+        continue;
+      }
+
+      const model = sdkModel(session.provider.name, session.model);
+      if (!model) {
+        console.log(
+          `No agent adapter for ${session.provider.name}. Switch to anthropic or openai with /model.`,
+        );
+        continue;
+      }
+
+      try {
+        const result = await investigate({
+          model,
+          modelId: session.model,
+          question,
+          braveSearchKey: process.env.BRAVE_SEARCH_KEY ?? "",
+          spend: (usage) => session.record(session.model, usage),
+          on: {
+            thought: (thought) => console.log(dim(`\n· ${thought}`)),
+            tool: (call) =>
+              console.log(
+                dim(
+                  `  → ${call.name} ${preview(call.input)}${call.failed ? " (failed)" : ""}\n    ${preview(call.result, 160)}`,
+                ),
+              ),
+          },
+        });
+
+        stdout.write(`\n${result.report}\n`);
+        console.log(
+          dim(
+            `\n${result.steps} ${result.steps === 1 ? "step" : "steps"} · stopped: ${result.stopped} · $${result.dollars.toFixed(6)} · ${result.findings.length} ${result.findings.length === 1 ? "finding" : "findings"}`,
+          ),
+        );
+      } catch (error) {
+        console.log(`Investigation failed: ${message(error)}`);
       }
       continue;
     }

@@ -5,6 +5,9 @@ import type {
   Tool as AnthropicTool,
   ToolResultBlockParam,
 } from "@anthropic-ai/sdk/resources/messages/messages";
+import { anthropic as anthropicProvider } from "@ai-sdk/anthropic";
+import { openai as openaiProvider } from "@ai-sdk/openai";
+import type { LanguageModel } from "ai";
 import OpenAI from "openai";
 import type {
   Response as OpenAIResponse,
@@ -110,6 +113,35 @@ export const OPENROUTER_MODELS: readonly Model[] = OPENAI_MODELS.map(
     id: `openai/${model.id}`,
   }),
 );
+
+const PRICED_MODELS: readonly Model[] = [
+  ...ANTHROPIC_MODELS,
+  ...OPENAI_MODELS,
+  ...OPENROUTER_MODELS,
+];
+
+/** A model's published list price, or undefined when it has none. */
+export function priceOf(
+  modelId: string,
+): Model["pricePerMillionTokens"] | undefined {
+  return PRICED_MODELS.find((model) => model.id === modelId)
+    ?.pricePerMillionTokens;
+}
+
+/**
+ * One model id through a provider's AI SDK adapter, for callers that use the
+ * SDK directly such as the agent loop. OpenRouter has no adapter here.
+ */
+export function sdkModel(
+  provider: string,
+  modelId: string,
+): LanguageModel | undefined {
+  if (provider === "anthropic") {
+    return anthropicProvider.languageModel(modelId);
+  }
+  if (provider === "openai") return openaiProvider.languageModel(modelId);
+  return undefined;
+}
 
 /** The JSON Schema both APIs accept, without Zod's draft marker. */
 function toolSchema(tool: Tool) {

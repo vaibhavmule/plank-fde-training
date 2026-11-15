@@ -90,6 +90,22 @@ function isFormResult(value: unknown): value is FormResult {
   );
 }
 
+// A model can reference a child element it never emits. The renderer then
+// draws nothing for that branch, which looks like an empty card.
+function missingReferences(spec: Spec): number {
+  const elements = spec.elements as Record<string, { children?: unknown }>;
+  let missing = 0;
+
+  for (const element of Object.values(elements)) {
+    const children = Array.isArray(element.children) ? element.children : [];
+    for (const key of children) {
+      if (!(key in elements)) missing += 1;
+    }
+  }
+
+  return missing;
+}
+
 const graded = defineRegistry(catalog, {
   components: {
     Page: ({ props, children }) => (
@@ -205,40 +221,46 @@ const graded = defineRegistry(catalog, {
         )}
       </Alert>
     ),
-    Table: ({ props }) => (
-      <Table>
-        {props.caption && (
-          <caption className="text-muted-foreground mb-2 text-left text-sm">
-            {props.caption}
-          </caption>
-        )}
-        <TableHeader>
-          <tr>
-            {props.columns.map((column, index) => (
-              <TableHead key={`${column}-${index}`} scope="col">
-                {column}
-              </TableHead>
-            ))}
-          </tr>
-        </TableHeader>
-        <TableBody>
-          {props.rows.map((row, rowIndex) => (
-            <TableRow key={rowIndex}>
-              {row.map((cell, cellIndex) => (
-                <TableCell key={cellIndex}>{cell}</TableCell>
+    Table: ({ props }) => {
+      const columns = Array.isArray(props.columns) ? props.columns : [];
+      const rows = Array.isArray(props.rows) ? props.rows : [];
+
+      return (
+        <Table>
+          {props.caption && (
+            <caption className="text-muted-foreground mb-2 text-left text-sm">
+              {props.caption}
+            </caption>
+          )}
+          <TableHeader>
+            <tr>
+              {columns.map((column, index) => (
+                <TableHead key={`${column}-${index}`} scope="col">
+                  {column}
+                </TableHead>
               ))}
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    ),
+            </tr>
+          </TableHeader>
+          <TableBody>
+            {rows.map((row, rowIndex) => (
+              <TableRow key={rowIndex}>
+                {row.map((cell, cellIndex) => (
+                  <TableCell key={cellIndex}>{cell}</TableCell>
+                ))}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      );
+    },
     BarChart: ({ props }) => {
-      const max = Math.max(1, ...props.data.map((item) => item.value));
+      const data = Array.isArray(props.data) ? props.data : [];
+      const max = Math.max(1, ...data.map((item) => item.value));
       return (
         <figure className="space-y-3">
           <figcaption className="font-medium">{props.title}</figcaption>
           <div className="space-y-2" role="img" aria-label={props.title}>
-            {props.data.map((item) => (
+            {data.map((item) => (
               <div
                 key={item.label}
                 className="grid grid-cols-[7rem_minmax(0,1fr)_auto] items-center gap-2 text-sm"
@@ -260,7 +282,8 @@ const graded = defineRegistry(catalog, {
       );
     },
     LineChart: ({ props }) => {
-      const values = props.data.map((item) => item.value);
+      const data = Array.isArray(props.data) ? props.data : [];
+      const values = data.map((item) => item.value);
       const max = Math.max(1, ...values);
       const points = values
         .map((value, index) => {
@@ -289,7 +312,7 @@ const graded = defineRegistry(catalog, {
             />
           </svg>
           <ul className="text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 text-xs">
-            {props.data.map((item) => (
+            {data.map((item) => (
               <li key={item.label}>
                 {item.label}: {number.format(item.value)}
               </li>
@@ -299,9 +322,10 @@ const graded = defineRegistry(catalog, {
       );
     },
     PieChart: ({ props }) => {
-      const total = props.data.reduce((sum, item) => sum + item.value, 0);
+      const data = Array.isArray(props.data) ? props.data : [];
+      const total = data.reduce((sum, item) => sum + item.value, 0);
       let cursor = 0;
-      const stops = props.data.map((item, index) => {
+      const stops = data.map((item, index) => {
         const start = total === 0 ? 0 : (cursor / total) * 100;
         cursor += item.value;
         const end = total === 0 ? 0 : (cursor / total) * 100;
@@ -320,7 +344,7 @@ const graded = defineRegistry(catalog, {
           <div className="space-y-1">
             <figcaption className="font-medium">{props.title}</figcaption>
             <ul className="space-y-1 text-sm">
-              {props.data.map((item, index) => (
+              {data.map((item, index) => (
                 <li key={item.label} className="flex items-center gap-2">
                   <span
                     className="size-2.5 rounded-full"
@@ -337,43 +361,48 @@ const graded = defineRegistry(catalog, {
         </figure>
       );
     },
-    Timeline: ({ props }) => (
-      <ol className="space-y-4">
-        {props.items.map((item, index) => (
-          <li key={`${item.title}-${index}`} className="flex gap-3">
-            <span className="bg-primary mt-1.5 size-2 shrink-0 rounded-full" />
-            <div className="min-w-0 space-y-0.5">
-              <p className="font-medium">{item.title}</p>
-              {item.detail && (
-                <p className="text-muted-foreground text-sm">{item.detail}</p>
-              )}
-              {item.time && (
-                <p className="text-muted-foreground text-xs">{item.time}</p>
-              )}
-            </div>
-          </li>
-        ))}
-      </ol>
-    ),
+    Timeline: ({ props }) => {
+      const items = Array.isArray(props.items) ? props.items : [];
+
+      return (
+        <ol className="space-y-4">
+          {items.map((item, index) => (
+            <li key={`${item.title}-${index}`} className="flex gap-3">
+              <span className="bg-primary mt-1.5 size-2 shrink-0 rounded-full" />
+              <div className="min-w-0 space-y-0.5">
+                <p className="font-medium">{item.title}</p>
+                {item.detail && (
+                  <p className="text-muted-foreground text-sm">{item.detail}</p>
+                )}
+                {item.time && (
+                  <p className="text-muted-foreground text-xs">{item.time}</p>
+                )}
+              </div>
+            </li>
+          ))}
+        </ol>
+      );
+    },
     Tabs: ({ props, bindings }) => {
+      const tabs = Array.isArray(props.tabs) ? props.tabs : [];
       const [value, setValue] = useBoundProp<string>(
         props.value ?? undefined,
         bindings?.value,
       );
-      const active = value ?? props.tabs[0]?.value;
+      const active = value ?? tabs[0]?.value;
       return (
         <TabsRoot
           value={active}
           onValueChange={(next) => setValue(String(next))}
         >
           <TabsList>
-            {props.tabs.map((tab) => (
+            {tabs.map((tab) => (
               <TabsTrigger key={tab.value} value={tab.value}>
                 {tab.label}
               </TabsTrigger>
             ))}
           </TabsList>
-          {props.tabs.map((tab) => (
+          {tabs.map((tab) => (
             <TabsContent key={tab.value} value={tab.value}>
               <p className="text-sm">{tab.content}</p>
             </TabsContent>
@@ -589,8 +618,19 @@ export function GeneratedUI({
 
   if (!spec) return null;
 
+  const missing = missingReferences(spec);
+
   return (
     <div className="space-y-4">
+      {!loading && missing > 0 && (
+        <Alert variant="destructive">
+          <AlertTitle>Part of this page is missing</AlertTitle>
+          <AlertDescription>
+            The model referenced {missing} element{missing === 1 ? "" : "s"} it
+            did not generate. Generate the page again for a complete result.
+          </AlertDescription>
+        </Alert>
+      )}
       {result && (
         <Alert variant={result.status === "error" ? "destructive" : "default"}>
           <AlertTitle>

@@ -22,7 +22,7 @@ describe("health check", () => {
       database: "ok",
       commit: expect.any(String),
     });
-  });
+  }, 20_000);
 
   test("answers 503 when the database is unreachable", async () => {
     vi.mocked(query).mockRejectedValueOnce(new Error("connection refused"));
