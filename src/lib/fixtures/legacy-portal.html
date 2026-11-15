@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Fieldstone Vendor Portal</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: Verdana, Arial, sans-serif;
+        font-size: 14px;
+        color: #1d2b3a;
+        background: #f2f0e9;
+      }
+      .top {
+        background: #24466b;
+        color: #ffffff;
+        padding: 14px 24px;
+        font-size: 18px;
+        font-weight: bold;
+      }
+      .top span {
+        font-size: 12px;
+        font-weight: normal;
+        float: right;
+        padding-top: 4px;
+      }
+      .layout {
+        display: flex;
+        min-height: 700px;
+      }
+      .menu {
+        width: 210px;
+        background: #d9d4c7;
+        border-right: 1px solid #b8b2a3;
+        padding: 18px 0;
+      }
+      .menu a {
+        display: block;
+        padding: 9px 22px;
+        color: #24466b;
+        text-decoration: none;
+      }
+      .menu a.active {
+        background: #ffffff;
+        font-weight: bold;
+      }
+      .content {
+        padding: 26px 34px;
+      }
+      h1 {
+        font-size: 20px;
+        margin: 0 0 6px;
+      }
+      .note {
+        color: #5b5b5b;
+        margin: 0 0 22px;
+      }
+      .panel {
+        background: #ffffff;
+        border: 1px solid #b8b2a3;
+        padding: 22px;
+        width: 520px;
+      }
+      label {
+        display: block;
+        margin-bottom: 6px;
+        font-weight: bold;
+      }
+      input[type="text"] {
+        width: 240px;
+        padding: 10px;
+        font-size: 16px;
+        border: 2px solid #6f6a5d;
+        background: #fbfaf7;
+      }
+      button {
+        margin-left: 8px;
+        padding: 11px 22px;
+        font-size: 15px;
+        background: #24466b;
+        color: #ffffff;
+        border: 0;
+        cursor: pointer;
+      }
+      #status {
+        margin-top: 24px;
+        padding: 14px;
+        border: 2px solid #c9c3b4;
+        background: #fbfaf7;
+        font-size: 15px;
+        min-height: 20px;
+      }
+      .foot {
+        margin-top: 26px;
+        color: #7a7466;
+        font-size: 11px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="top">
+      Fieldstone Vendor Portal <span>Signed in as vendor</span>
+    </div>
+    <div class="layout">
+      <div class="menu">
+        <a href="#">Home</a>
+        <a href="#">Invoices</a>
+        <a href="#" class="active">Payment status</a>
+        <a href="#">Remittances</a>
+        <a href="#">Support</a>
+      </div>
+      <div class="content">
+        <h1>Payment status</h1>
+        <p class="note">Enter an invoice number to see how it was paid.</p>
+        <div class="panel">
+          <label for="invoice">Invoice number</label>
+          <input id="invoice" type="text" autocomplete="off" />
+          <button id="lookup" type="button">Look up</button>
+          <div id="status" role="status" aria-live="polite"></div>
+        </div>
+        <p class="foot">
+          Legacy vendor system. For help call the accounts desk.
+        </p>
+      </div>
+    </div>
+    <script>
+      var invoices = {
+        "INV-4411": "Paid on 2026-09-10 by ACH, reference FS-88213.",
+        "INV-2207": "Awaiting approval since 2026-10-02.",
+      };
+
+      document.getElementById("lookup").addEventListener("click", function () {
+        var field = document.getElementById("invoice");
+        var status = document.getElementById("status");
+        var number = field.value.trim().toUpperCase();
+
+        if (number === "") {
+          status.textContent = "Enter an invoice number.";
+          return;
+        }
+
+        status.textContent =
+          invoices[number] || "No invoice found with that number.";
+      });
+    </script>
+  </body>
+</html>
