@@ -1,8 +1,9 @@
 ---
 title: "Refund Policy"
-team: support
-updatedAt: 2026-11-14
+owner: Support lead
+updated: 2026-11-14
 summary: "How much a support agent may refund without approval, and how to handle larger refunds."
+team: support
 ---
 
 ## Refund authority

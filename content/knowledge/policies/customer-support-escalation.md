@@ -1,8 +1,9 @@
 ---
 title: "Customer Support Escalation Policy"
-team: support
-updatedAt: 2026-08-19
+owner: Support lead
+updated: 2026-08-19
 summary: "How support hands a customer issue to engineering or leadership."
+team: support
 ---
 
 ## When to escalate

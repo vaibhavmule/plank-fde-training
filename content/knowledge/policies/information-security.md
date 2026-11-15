@@ -1,8 +1,9 @@
 ---
 title: "Information Security Policy"
-team: operations
-updatedAt: 2026-09-28
+owner: Security team
+updated: 2026-09-28
 summary: "How WorkBot protects accounts, devices, applications and data."
+team: operations
 ---
 
 ## Principles

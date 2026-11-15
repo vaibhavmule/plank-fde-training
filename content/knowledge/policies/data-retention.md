@@ -1,8 +1,9 @@
 ---
 title: "Data Retention Policy"
-team: operations
-updatedAt: 2026-07-11
+owner: Operations team
+updated: 2026-07-11
 summary: "How long each kind of company and customer data is kept."
+team: operations
 ---
 
 ## Scope

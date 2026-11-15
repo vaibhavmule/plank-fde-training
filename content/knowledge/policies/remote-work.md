@@ -1,8 +1,9 @@
 ---
 title: "Remote Work Policy"
-team: operations
-updatedAt: 2026-10-21
+owner: People team
+updated: 2026-10-21
 summary: "Expectations for working from home, travel and shared spaces."
+team: operations
 ---
 
 ## Where you can work
