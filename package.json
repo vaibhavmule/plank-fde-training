@@ -14,6 +14,8 @@
     "test:live": "vitest run --config vitest.live.config.ts",
     "chat": "node --conditions=react-server --env-file-if-exists=.env.local --import tsx cli/chat.ts",
     "explain": "node --conditions=react-server --env-file-if-exists=.env.local --import tsx cli/explain.ts",
+    "knowledge:index": "node --conditions=react-server --env-file-if-exists=.env.local --import tsx cli/knowledge-index.ts",
+    "compare:retrieval": "node --conditions=react-server --env-file-if-exists=.env.local --import tsx cli/compare-retrieval.ts",
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build && pnpm --filter workbot-site check"
   },
   "dependencies": {
@@ -24,6 +26,7 @@
     "@anthropic-ai/sdk": "^1.8.0",
     "@base-ui/react": "^1.9.0",
     "@electric-sql/pglite": "^0.5.16",
+    "@electric-sql/pglite-pgvector": "^0.0.17",
     "@json-render/core": "^0.22.0",
     "@json-render/react": "^0.22.0",
     "@modelcontextprotocol/sdk": "^1.32.2",

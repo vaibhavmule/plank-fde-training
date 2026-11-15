@@ -1,6 +1,7 @@
 import "server-only";
 
 import { PGlite } from "@electric-sql/pglite";
+import { vector } from "@electric-sql/pglite-pgvector";
 import postgres from "postgres";
 
 import { config } from "@/lib/config";
@@ -18,7 +19,11 @@ const EMBEDDED_PATH = ".data/pg";
 // Route bundles do not share module instances, so the connection lives on
 // globalThis. An embedded database can only be open in one process.
 const globalForDb = globalThis as typeof globalThis & {
-  workbotDatabase?: Promise<{ query: DatabaseQuery }>;
+  workbotDatabase?: Promise<{
+    query: DatabaseQuery;
+    /** Releases the connection, for a program that is about to exit. */
+    close: () => Promise<void>;
+  }>;
 };
 
 function isPostgresUrl(url: string) {
@@ -31,15 +36,22 @@ function openPostgres(url: string) {
   return {
     query: (text: string, params: unknown[] = []) =>
       sql.unsafe<Row[]>(text, params as never[]),
+    close: () => sql.end({ timeout: 5 }),
   };
 }
 
 function openEmbedded(url: string) {
-  const database = new PGlite(url || EMBEDDED_PATH);
+  // The embedded database loads pgvector from the extension package, so tests
+  // run the same SQL a server with the extension does.
+  const database = new PGlite({
+    dataDir: url || EMBEDDED_PATH,
+    extensions: { vector },
+  });
 
   return {
     query: async (text: string, params: unknown[] = []) =>
       (await database.query<Row>(text, params)).rows,
+    close: () => database.close(),
   };
 }
 
@@ -72,4 +84,14 @@ export async function query(
   ));
 
   return database.query(text, params);
+}
+
+/**
+ * Closes the connection so a one-shot program such as an index build can exit.
+ * A request handler never calls this: Next keeps the pool for the next request.
+ */
+export async function closeDatabase(): Promise<void> {
+  const pending = globalForDb.workbotDatabase;
+  delete globalForDb.workbotDatabase;
+  if (pending) await (await pending).close();
 }

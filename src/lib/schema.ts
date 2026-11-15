@@ -35,4 +35,37 @@ export const schemaStatements = [
     created_at timestamptz not null default now(),
     unique (visitor, text)
   )`,
+  // pgvector is optional: a Postgres without the extension keeps word search
+  // and skips the embedding column below.
+  `do $$ begin
+    create extension if not exists vector;
+  exception when others then
+    raise notice 'pgvector is unavailable; knowledge search uses words only';
+  end $$`,
+  // One row per `##` section of a knowledge document. The tsvector is derived,
+  // so it can never fall out of step with the text it indexes.
+  `create table if not exists chunks (
+    id uuid primary key default gen_random_uuid(),
+    path text not null,
+    section text not null,
+    slug text not null,
+    title text not null,
+    heading text not null default '',
+    position integer not null,
+    text text not null,
+    updated timestamptz not null default now(),
+    search tsvector generated always as (
+      to_tsvector('english', title || ' ' || heading || ' ' || text)
+    ) stored,
+    unique (path, position)
+  )`,
+  `create index if not exists chunks_search_idx on chunks using gin (search)`,
+  `create index if not exists chunks_section_idx on chunks (section)`,
+  // The embedding's size is part of the schema, so it must match the model:
+  // voyage-3.5 returns 1024 values.
+  `do $$ begin
+    if exists (select 1 from pg_type where typname = 'vector') then
+      execute 'alter table chunks add column if not exists embedding vector(1024)';
+    end if;
+  end $$`,
 ];

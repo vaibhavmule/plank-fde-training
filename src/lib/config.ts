@@ -13,6 +13,9 @@ export const config = {
   chatModel: process.env.CHAT_MODEL || "",
   // Without this key the web_search tool is not registered.
   braveSearchKey: process.env.BRAVE_SEARCH_KEY ?? "",
+  // Without this key the knowledge index is built from words alone, and `find`
+  // ranks by matching terms instead of by meaning.
+  voyageApiKey: process.env.VOYAGE_API_KEY ?? "",
   posthogKey: process.env.POSTHOG_KEY ?? "",
   posthogHost: process.env.POSTHOG_HOST || "https://us.i.posthog.com",
 } as const;
