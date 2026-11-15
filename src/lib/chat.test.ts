@@ -8,6 +8,7 @@ import { ANTHROPIC_MODELS } from "./providers";
 import { resetMemories } from "./test-fixtures";
 
 vi.mock("server-only", () => ({}));
+vi.mock("next/cache", () => ({ io: vi.fn(async () => {}) }));
 
 beforeEach(async () => {
   await resetMemories();

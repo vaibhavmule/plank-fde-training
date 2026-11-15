@@ -1,6 +1,7 @@
 import "server-only";
 
 import { generateText, Output, type LanguageModel } from "ai";
+import { io } from "next/cache";
 import { z } from "zod";
 
 import { query, type Row } from "@/lib/db";
@@ -53,6 +54,8 @@ const COLUMNS = `id, kind, text, created_at as "createdAt"`;
 
 /** The visitor's memories, oldest first, so the settings page groups cleanly. */
 export async function listMemories(visitor: string): Promise<Memory[]> {
+  await io();
+
   const rows = await query(
     `select ${COLUMNS} from memories
      where visitor = $1
@@ -73,6 +76,7 @@ export async function remember(
 ): Promise<Memory[]> {
   const facts = z.array(extractedMemorySchema).parse(memories);
   const stored: Memory[] = [];
+  await io();
 
   for (const fact of facts) {
     const rows = await query(
@@ -97,6 +101,8 @@ export async function forget(visitor: string, id: unknown): Promise<boolean> {
   const parsed = z.uuid().safeParse(id);
   if (!parsed.success) return false;
 
+  await io();
+
   const rows = await query(
     `delete from memories
      where id = $1 and visitor = $2
@@ -109,6 +115,8 @@ export async function forget(visitor: string, id: unknown): Promise<boolean> {
 
 /** Deletes every memory the visitor has, and returns how many there were. */
 export async function forgetAll(visitor: string): Promise<number> {
+  await io();
+
   const rows = await query(
     `delete from memories where visitor = $1 returning id`,
     [visitor],

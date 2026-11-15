@@ -4,6 +4,7 @@ import { chatModel, handleChat } from "./chat";
 import { extractMemories, forgetAll, listMemories } from "./memory";
 
 vi.mock("server-only", () => ({}));
+vi.mock("next/cache", () => ({ io: vi.fn(async () => {}) }));
 
 // Calls the real API. Run with `pnpm test:live`, never as part of `pnpm test`.
 

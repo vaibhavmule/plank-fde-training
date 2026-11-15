@@ -13,6 +13,7 @@ import {
 import { resetMemories } from "./test-fixtures";
 
 vi.mock("server-only", () => ({}));
+vi.mock("next/cache", () => ({ io: vi.fn(async () => {}) }));
 
 beforeEach(async () => {
   await resetMemories();
