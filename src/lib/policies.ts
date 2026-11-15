@@ -124,6 +124,164 @@ export async function loadPolicy(slug: unknown): Promise<Policy | null> {
   return readPolicyFile(slug);
 }
 
+/** One policy that answers part of a question, with the lines that matched. */
+export type PolicyMatch = {
+  slug: string;
+  title: string;
+  summary: string;
+  /** Higher is a better match: a title word counts 3, a matching line 1. */
+  score: number;
+  /** The body lines that mention a question word, in document order. */
+  lines: string[];
+};
+
+// Words too common to tell one policy from another.
+const STOP_WORDS = new Set([
+  "the",
+  "and",
+  "for",
+  "are",
+  "can",
+  "how",
+  "what",
+  "who",
+  "why",
+  "when",
+  "does",
+  "did",
+  "was",
+  "were",
+  "with",
+  "without",
+  "from",
+  "that",
+  "this",
+  "have",
+  "has",
+  "you",
+  "your",
+  "our",
+  "any",
+  "all",
+  "may",
+  "must",
+  "should",
+  "would",
+  "could",
+  "there",
+  "their",
+  "them",
+  "they",
+  "about",
+  "into",
+  "over",
+  "under",
+  "more",
+  "most",
+  "than",
+  "then",
+  "also",
+  "one",
+  "two",
+  "whom",
+  "its",
+  "of",
+  "in",
+  "on",
+  "at",
+  "to",
+  "is",
+  "it",
+  "as",
+  "by",
+  "be",
+  "or",
+  "if",
+  "an",
+  "no",
+  "not",
+  "do",
+  "so",
+  "up",
+  "we",
+  "us",
+  "me",
+  "my",
+  "he",
+  "she",
+  "him",
+  "his",
+  "her",
+  "am",
+  "been",
+  "only",
+  "just",
+  "some",
+  "such",
+  "very",
+  "after",
+  "before",
+  "own",
+  "same",
+]);
+
+/** The question's words, lowercased and without punctuation or stop words. */
+export function questionWords(question: string): string[] {
+  const words = question
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((word) => word.length > 1 && !STOP_WORDS.has(word));
+
+  return [...new Set(words)];
+}
+
+// Whole words only, so "limit" does not match "unlimited". Only letters and
+// digits reach here, so the word needs no regular-expression escaping.
+function mentions(text: string, word: string) {
+  return new RegExp(`(^|[^a-z0-9])${word}($|[^a-z0-9])`).test(text);
+}
+
+/**
+ * Policies that mention the question's words, best first. Each matching body
+ * line counts once, however often it repeats a word, and each question word in
+ * the title counts three times. Plain word matching is enough for 8 documents.
+ */
+export async function searchPolicies(question: string): Promise<PolicyMatch[]> {
+  const words = questionWords(question);
+  if (words.length === 0) return [];
+
+  const matches: PolicyMatch[] = [];
+
+  for (const policy of await loadPolicies()) {
+    const titleHits = words.filter((word) =>
+      mentions(policy.title.toLowerCase(), word),
+    ).length;
+    const lines = policy.body
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(
+        (line) =>
+          line !== "" &&
+          words.some((word) => mentions(line.toLowerCase(), word)),
+      );
+
+    const score = titleHits * 3 + lines.length;
+    if (score === 0) continue;
+
+    matches.push({
+      slug: policy.slug,
+      title: policy.title,
+      summary: policy.summary,
+      score,
+      lines,
+    });
+  }
+
+  return matches.sort(
+    (a, b) => b.score - a.score || a.title.localeCompare(b.title, "en"),
+  );
+}
+
 /** Metadata for every policy, sorted by title. */
 export async function listPolicies(): Promise<PolicyMeta[]> {
   "use cache";
