@@ -1,9 +1,11 @@
 import { z } from "zod";
 
-import { policyMetaSchema } from "@/lib/policies";
-
-export const policySummarySchema = policyMetaSchema.extend({
+export const policySummarySchema = z.strictObject({
   slug: z.string(),
+  title: z.string(),
+  team: z.string(),
+  updatedAt: z.iso.date(),
+  summary: z.string(),
 });
 
 export const listPoliciesResponseSchema = z.strictObject({

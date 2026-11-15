@@ -1,32 +1,12 @@
-import { z, type ZodObject } from "zod";
+import { z } from "zod";
 
 import { evaluate } from "@/lib/calculator";
+import { customerSections, knowledgeTools } from "@/lib/knowledge-tools";
 import { noteInputSchema } from "@/lib/note-model";
+import { tool, type Tool } from "@/lib/tool";
 import { readPage, searchWeb } from "@/lib/web";
 
-// An object schema, because the Agent SDK builds its tools from `.shape`.
-export type Tool<S extends ZodObject = ZodObject> = {
-  name: string;
-  description: string;
-  input: S;
-  run(input: z.infer<S>): Promise<string>;
-};
-
-export function tool<S extends ZodObject>(definition: {
-  name: string;
-  description: string;
-  input: S;
-  run: (input: z.infer<S>) => string | Promise<string>;
-}): Tool<S> {
-  return {
-    name: definition.name,
-    description: definition.description,
-    input: definition.input,
-    async run(input) {
-      return definition.run(input);
-    },
-  };
-}
+export { tool, type Tool };
 
 const calculatorInput = z.object({
   expression: z
@@ -180,9 +160,14 @@ export type ToolOptions = {
   fetch?: typeof globalThis.fetch;
 };
 
-/** Everything the model may call. web_search is present only with a Brave key. */
-export function createTools(options: ToolOptions = {}): Tool[] {
+/**
+ * Everything a member of staff may call: the whole knowledge base, the
+ * calculator, page reading, notes and web search. Used by the terminal, the
+ * investigation agent and the explainer's researcher.
+ */
+export function employeeTools(options: ToolOptions = {}): Tool[] {
   const registry: Tool[] = [
+    ...knowledgeTools(),
     calculatorTool,
     readUrlTool(options.fetch),
     saveNoteTool,
@@ -193,4 +178,17 @@ export function createTools(options: ToolOptions = {}): Tool[] {
   }
 
   return registry;
+}
+
+/**
+ * Everything a customer may call: the knowledge base narrowed to the sections
+ * a customer may read, the calculator and page reading. No notes and no web
+ * search, because the web chat is public until Day 30 adds sign-in.
+ */
+export function customerTools(options: ToolOptions = {}): Tool[] {
+  return [
+    ...knowledgeTools(customerSections),
+    calculatorTool,
+    readUrlTool(options.fetch),
+  ];
 }
