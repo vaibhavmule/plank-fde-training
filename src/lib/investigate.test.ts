@@ -1,7 +1,7 @@
 import { MockLanguageModelV4 } from "ai/test";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-import type { AgentToolEvent } from "@/lib/agent";
+import type { Entry } from "@/lib/investigate";
 import { investigate, stoppedBeforeReport } from "@/lib/investigate";
 import { indexKnowledge } from "@/lib/knowledge";
 
@@ -14,10 +14,15 @@ beforeEach(async () => {
 
 const QUESTION = "Can a support agent approve a $250 refund alone?";
 
+const FINDING = {
+  text: "A support agent may refund up to $200 per customer without approval.",
+  source: "policies/refunds#refund-authority",
+};
+
 const REPORT = `Yes, but only with written approval. A support agent may refund up to $200 per customer, so $250 needs the support lead's approval.
 
 Sources:
-- policies/refunds#larger-refunds`;
+- policies/refunds#refund-authority`;
 
 type Reply =
   | { text: string }
@@ -38,6 +43,7 @@ function scripted(replies: Reply[]) {
   let index = 0;
 
   return new MockLanguageModelV4({
+    modelId: "claude-haiku-5-5",
     doGenerate: async () => {
       const reply = replies[index];
       index += 1;
@@ -72,190 +78,139 @@ function scripted(replies: Reply[]) {
   });
 }
 
-function collect() {
-  const thoughts: string[] = [];
-  const calls: AgentToolEvent[] = [];
+/** The log as short strings, so an ordering assertion reads clearly. */
+function outline(log: Entry[]): string[] {
+  return log.map((entry) => {
+    if (entry.kind === "thought")
+      return `${entry.agent} thought: ${entry.text}`;
+    if (entry.kind === "tool") return `${entry.agent} tool: ${entry.name}`;
+    return `${entry.agent} done: ${entry.outcome}`;
+  });
+}
 
-  return {
-    thoughts,
-    calls,
-    on: {
-      thought: (text: string) => thoughts.push(text),
-      tool: (call: AgentToolEvent) => calls.push(call),
+/** An analyst that delegates to the knowledge base, then writes the report. */
+function delegatingAnalyst() {
+  return scripted([
+    {
+      text: "I'll ask the knowledge base for the refund limit.",
+      calls: [
+        {
+          name: "ask_knowledge_base",
+          input: { question: "What is the refund limit for a support agent?" },
+        },
+      ],
     },
-  };
+    {
+      text: "I have the limit, so I'll write the report.",
+      calls: [{ name: "write_report", input: { report: REPORT } }],
+    },
+  ]);
+}
+
+/** A specialist that searches, saves one finding, then answers in text. */
+function knowledgeSpecialist() {
+  return scripted([
+    {
+      text: "I'll search for the refund limit and save what I find.",
+      calls: [
+        { name: "find", input: { query: "refund limit" } },
+        { name: "save_finding", input: FINDING },
+      ],
+    },
+    {
+      text: `${FINDING.text} (${FINDING.source})`,
+    },
+  ]);
 }
 
 describe("investigate", () => {
-  test("finds, reads a section, saves findings and writes a sourced report", async () => {
-    const { on, thoughts, calls } = collect();
-
-    const result = await investigate({
-      model: scripted([
-        {
-          text: "I'll search the knowledge base for refund limits.",
-          calls: [{ name: "find", input: { query: "refund limit" } }],
-        },
-        {
-          text: "I'll read the refund authority section.",
-          calls: [
-            {
-              name: "cat",
-              input: { path: "policies/refunds#refund-authority" },
-            },
-          ],
-        },
-        {
-          text: "I'll save the limit with its source.",
-          calls: [
-            {
-              name: "save_finding",
-              input: {
-                text: "A support agent may refund up to $200 per customer without approval.",
-                source: "policies/refunds#refund-authority",
-              },
-            },
-          ],
-        },
-        {
-          text: "I have what I need, so I'll write the report.",
-          calls: [{ name: "write_report", input: { report: REPORT } }],
-        },
-      ]),
-      modelId: "claude-haiku-5-5",
-      question: QUESTION,
-      on,
-    });
+  test("delegates to the knowledge specialist and writes a sourced report", async () => {
+    const result = await investigate(
+      QUESTION,
+      { analyst: delegatingAnalyst(), specialist: knowledgeSpecialist() },
+      {},
+    );
 
     expect(result.stopped).toBe("answered");
     expect(result.report).toBe(REPORT);
-    expect(result.steps).toBe(4);
-    expect(result.findings).toEqual([
-      {
-        text: "A support agent may refund up to $200 per customer without approval.",
-        source: "policies/refunds#refund-authority",
-      },
-    ]);
-    expect(calls.map((call) => call.name)).toEqual([
-      "find",
-      "cat",
-      "save_finding",
-      "write_report",
-    ]);
-    expect(thoughts).toEqual([
-      "I'll search the knowledge base for refund limits.",
-      "I'll read the refund authority section.",
-      "I'll save the limit with its source.",
-      "I have what I need, so I'll write the report.",
-    ]);
-
-    // The search found the refunds section and the read returned the limit.
-    expect(calls[0].result).toContain("policies/refunds");
-    expect(calls[1].result).toContain("$200");
-  });
-
-  test("a run that stops early returns the findings it saved", async () => {
-    const result = await investigate({
-      model: scripted([
-        {
-          calls: [
-            {
-              name: "save_finding",
-              input: {
-                text: "Refunds above $200 need the support lead.",
-                source: "policies/refunds#larger-refunds",
-              },
-            },
-          ],
-        },
-        { calls: [{ name: "cat", input: { path: "policies/refunds" } }] },
-      ]),
-      modelId: "claude-haiku-5-5",
-      question: QUESTION,
-      limits: { steps: 2, dollars: 0, seconds: 0 },
-    });
-
-    expect(result.stopped).toBe("steps");
-    expect(result.report).toBe(
-      "The investigation stopped (steps) before a report was written.\n\nFindings so far:\n- Refunds above $200 need the support lead. — policies/refunds#larger-refunds",
+    expect(result.report).toContain(FINDING.source);
+    expect(result.findings).toEqual([FINDING]);
+    expect(result.total).toBe(
+      result.cost.analyst + result.cost.knowledge + result.cost.web,
     );
+    expect(result.cost.analyst).toBeGreaterThan(0);
+    expect(result.cost.knowledge).toBeGreaterThan(0);
+    expect(result.cost.web).toBe(0);
   });
 
-  test("an unknown document path comes back as an error and the run goes on", async () => {
-    const { on, calls } = collect();
+  test("logs each agent's thought, calls and finish in order", async () => {
+    const live: Entry[] = [];
 
-    const result = await investigate({
-      model: scripted([
-        { calls: [{ name: "cat", input: { path: "policies/refundz" } }] },
-        {
-          calls: [
-            { name: "write_report", input: { report: "No policy covers it." } },
-          ],
-        },
-      ]),
-      modelId: "claude-haiku-5-5",
-      question: QUESTION,
-      on,
-    });
+    const result = await investigate(
+      QUESTION,
+      { analyst: delegatingAnalyst(), specialist: knowledgeSpecialist() },
+      { on: { log: (entry) => live.push(entry) } },
+    );
 
-    expect(result.stopped).toBe("answered");
-    expect(calls[0].failed).toBe(true);
-    expect(calls[0].result).toContain("There is no document at");
-    expect(result.report).toBe("No policy covers it.");
+    const expected = [
+      "analyst thought: I'll ask the knowledge base for the refund limit.",
+      "knowledge thought: I'll search for the refund limit and save what I find.",
+      "knowledge tool: find",
+      "knowledge tool: save_finding",
+      `knowledge thought: ${FINDING.text} (${FINDING.source})`,
+      "knowledge done: answered",
+      "analyst tool: ask_knowledge_base",
+      "analyst thought: I have the limit, so I'll write the report.",
+      "analyst tool: write_report",
+      "analyst done: answered",
+    ];
+
+    expect(outline(result.log)).toEqual(expected);
+    expect(outline(live)).toEqual(expected);
   });
 
-  test("offers web tools only when a Brave key is set", async () => {
-    const withKey: string[] = [];
-    const withoutKey: string[] = [];
+  test("a run cut off by its limits keeps the findings it saved", async () => {
+    const specialist = scripted([
+      {
+        calls: [
+          { name: "find", input: { query: "refund limit" } },
+          { name: "save_finding", input: FINDING },
+        ],
+      },
+      { text: FINDING.text },
+    ]);
 
-    const reply = {
-      calls: [{ name: "write_report", input: { report: "done" } }],
-    };
-
-    await investigate({
-      model: scripted([reply]),
-      modelId: "claude-haiku-5-5",
-      question: "anything",
-      braveSearchKey: "key",
-      on: { tool: (call) => withKey.push(call.name) },
-    });
-
-    const noKeyModel = new MockLanguageModelV4({
-      doGenerate: async () => ({
-        content: [
+    const analyst = scripted([
+      {
+        calls: [
           {
-            type: "tool-call",
-            toolCallId: "c1",
-            toolName: "web_search",
-            input: JSON.stringify({ query: "x" }),
+            name: "ask_knowledge_base",
+            input: { question: "What is the refund limit?" },
           },
         ],
-        finishReason: { unified: "tool-calls", raw: "tool_use" },
-        usage,
-        warnings: [],
-      }),
-    });
+      },
+    ]);
 
-    await investigate({
-      model: noKeyModel,
-      modelId: "claude-haiku-5-5",
-      question: "anything",
-      limits: { steps: 1, dollars: 0, seconds: 0 },
-      on: { tool: (call) => withoutKey.push(call.name) },
-    });
+    const result = await investigate(
+      QUESTION,
+      { analyst, specialist },
+      { limits: { steps: 1 } },
+    );
 
-    expect(withKey).toEqual(["write_report"]);
-    // Without a key the tool is not registered, so the call is an error result.
-    expect(withoutKey).toEqual(["web_search"]);
+    expect(result.stopped).toBe("steps");
+    expect(result.findings).toEqual([FINDING]);
+    expect(result.report).toBe(
+      `The investigation stopped (steps) before a report was written.\n\nFindings so far:\n- ${FINDING.text} — ${FINDING.source}`,
+    );
   });
 
   test("rejects an empty question before calling the model", async () => {
     await expect(
-      investigate({
-        model: scripted([]),
-        modelId: "claude-haiku-5-5",
-        question: "  ",
-      }),
+      investigate(
+        "  ",
+        { analyst: scripted([]), specialist: scripted([]) },
+        {},
+      ),
     ).rejects.toThrow(/Ask an investigation question/);
   });
 });

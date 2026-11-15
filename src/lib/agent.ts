@@ -52,8 +52,8 @@ export type AgentOptions = {
   system: string;
   task: string;
   tools: readonly Tool[];
-  /** The tool whose call ends the run. */
-  done: string;
+  /** The tool whose call ends the run. Without one, the run ends on text. */
+  done?: string;
   limits?: Partial<AgentLimits>;
   on?: Partial<AgentEvents>;
   /** Called once per model call, so a caller can keep a running cost. */
@@ -181,7 +181,11 @@ export async function runAgent(options: AgentOptions): Promise<AgentResult> {
 
     try {
       const result = await beforeDeadline(entry.run(parsed.data), remaining());
-      return { result, failed: false, ends: call.toolName === options.done };
+      return {
+        result,
+        failed: false,
+        ends: options.done !== undefined && call.toolName === options.done,
+      };
     } catch (error) {
       return {
         result: `The ${entry.name} tool failed: ${message(error)}`,

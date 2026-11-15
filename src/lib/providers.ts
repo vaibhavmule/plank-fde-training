@@ -120,6 +120,11 @@ const PRICED_MODELS: readonly Model[] = [
   ...OPENROUTER_MODELS,
 ];
 
+/** A model's id, whether the model is an instance or a bare id. */
+export function modelIdOf(model: LanguageModel): string {
+  return typeof model === "string" ? model : model.modelId;
+}
+
 /** A model's published list price, or undefined when it has none. */
 export function priceOf(
   modelId: string,
