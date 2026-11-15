@@ -16,6 +16,8 @@
     "explain": "node --conditions=react-server --env-file-if-exists=.env.local --import tsx cli/explain.ts",
     "knowledge:index": "node --conditions=react-server --env-file-if-exists=.env.local --import tsx cli/knowledge-index.ts",
     "compare:retrieval": "node --conditions=react-server --env-file-if-exists=.env.local --import tsx cli/compare-retrieval.ts",
+    "scrape": "node --conditions=react-server --env-file-if-exists=.env.local --import tsx cli/scrape.ts",
+    "browse": "node --conditions=react-server --env-file-if-exists=.env.local --import tsx cli/browse.ts",
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build && pnpm --filter workbot-site check"
   },
   "dependencies": {
@@ -53,6 +55,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.4.6",
+    "playwright-core": "^1.65.1",
     "prettier": "^3.10.1",
     "shadcn": "^4.23.0",
     "tailwindcss": "4.3.3",

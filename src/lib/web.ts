@@ -4,6 +4,8 @@ export const MAX_PAGE_BYTES = 512 * 1024;
 export const MAX_PAGE_CHARACTERS = 8_000;
 
 const MAX_REDIRECTS = 5;
+// A scraper that reads other people's pages says who it is.
+const USER_AGENT = "WorkBot/1.0 (+https://joinplank.com/ai-fde-course)";
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 const BLOCK_BOUNDARY =
   /<\/?(?:address|article|aside|blockquote|br|dd|div|dl|dt|fieldset|figcaption|figure|footer|form|h[1-6]|header|hr|li|main|nav|ol|p|pre|section|table|tbody|td|tfoot|th|thead|tr|ul)\b[^>]*>/gi;
@@ -68,7 +70,8 @@ function isPrivateIpv6(raw: string) {
   return mapped ? isPrivateIpv4(mapped[1]) : false;
 }
 
-function assertPublicUrl(source: string) {
+/** Throws unless a URL is http or https and points at a public address. */
+export function assertPublicUrl(source: string) {
   let url: URL;
   try {
     url = new URL(source);
@@ -102,7 +105,7 @@ function assertPublicUrl(source: string) {
   return url;
 }
 
-function decodeEntities(text: string) {
+export function decodeEntities(text: string) {
   return text.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (match, entity: string) => {
     if (entity.startsWith("#")) {
       const hexadecimal = entity[1]?.toLowerCase() === "x";
@@ -119,7 +122,7 @@ function decodeEntities(text: string) {
   });
 }
 
-export function extractText(html: string) {
+export function extractText(html: string, limit = MAX_PAGE_CHARACTERS) {
   const body = html
     .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, " ")
     .replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, " ")
@@ -134,7 +137,7 @@ export function extractText(html: string) {
     .replace(/ *\n */g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim()
-    .slice(0, MAX_PAGE_CHARACTERS);
+    .slice(0, limit);
 }
 
 async function readBody(response: Response, limit: number) {
@@ -171,18 +174,21 @@ async function readBody(response: Response, limit: number) {
   return new TextDecoder().decode(bytes);
 }
 
-/** Fetches a public page and returns its readable text, capped at 8,000 characters. */
-export async function readPage(
+/** Fetches a public page and returns its HTML with the address it was read from. */
+export async function fetchPage(
   source: string,
   options: ReadOptions = {},
-): Promise<string> {
+): Promise<{ html: string; url: string }> {
   const doFetch = options.fetch ?? globalThis.fetch;
   let url = assertPublicUrl(source);
 
   for (let redirects = 0; redirects <= MAX_REDIRECTS; redirects += 1) {
     const response = await doFetch(url, {
       redirect: "manual",
-      headers: { accept: "text/html, text/plain;q=0.9, */*;q=0.1" },
+      headers: {
+        accept: "text/html, text/plain;q=0.9, */*;q=0.1",
+        "user-agent": USER_AGENT,
+      },
     });
 
     if (REDIRECT_STATUSES.has(response.status)) {
@@ -201,10 +207,22 @@ export async function readPage(
       throw new Error(`The page answered ${response.status}.`);
     }
 
-    return extractText(await readBody(response, MAX_PAGE_BYTES));
+    return {
+      html: await readBody(response, MAX_PAGE_BYTES),
+      url: url.toString(),
+    };
   }
 
   throw new Error(`The page redirected more than ${MAX_REDIRECTS} times.`);
+}
+
+/** Fetches a public page and returns its readable text, capped at 8,000 characters. */
+export async function readPage(
+  source: string,
+  options: ReadOptions = {},
+): Promise<string> {
+  const page = await fetchPage(source, options);
+  return extractText(page.html);
 }
 
 /** Searches the web through Brave Search and returns titles, URLs and snippets. */
